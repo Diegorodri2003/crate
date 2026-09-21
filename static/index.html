@@ -262,12 +262,18 @@
     try{
       const s = await api("GET", "/api/status");
       const banner = document.getElementById("banner");
+      const degraded = s.degraded || [];
       if (s.missing && s.missing.length){
         banner.style.display = "block";
         banner.textContent = "DEMO MODE (fixtures) — not live yet: " + s.missing.join(", ");
       } else if (s.use_fixtures){
         banner.style.display = "block";
         banner.textContent = "DEMO MODE — USE_FIXTURES is on.";
+      } else if (degraded.length){
+        banner.style.display = "block";
+        banner.textContent = "DEGRADED — running on FIXTURES, not real analysis: " + degraded.join(", ");
+      } else {
+        banner.style.display = "none";
       }
     } catch(e){ /* already toasted */ }
   }
@@ -296,6 +302,7 @@
       if (s.done){
         clearInterval(scanPoll);
         document.getElementById("scan-count").textContent += "  — scan complete";
+        loadStatus();
       }
     }, 250);
   }
@@ -417,6 +424,7 @@
     let data;
     try { data = await api("POST", "/api/search", body); } catch(e){ return; }
     renderHits(document.getElementById("search-results"), data.hits || []);
+    loadStatus();
   }
 
   function numOrNull(v){ return (v === "" || v === null || v === undefined) ? null : Number(v); }

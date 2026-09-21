@@ -47,6 +47,21 @@ try:
 except Exception:
     _analyzer = None
 
+# True once this module has planned from fixtures instead of real analyzer
+# output. api.py reads this to warn in the UI.
+USING_FIXTURES = False
+
+
+def _fixture_fallback_banner(reason: str) -> None:
+    global USING_FIXTURES
+    USING_FIXTURES = True
+    line = "=" * 72
+    print(line, file=sys.stderr)
+    print("!!  organiser.py IS PLANNING FROM FIXTURES, NOT REAL ANALYSIS  !!", file=sys.stderr)
+    print(f"!!  reason: {reason}", file=sys.stderr)
+    print("!!  every family/instrument/BPM in this plan is fake data.", file=sys.stderr)
+    print(line, file=sys.stderr)
+
 # --------------------------------------------------------------------------
 # scan()
 # --------------------------------------------------------------------------
@@ -460,7 +475,10 @@ def _load_demo_records(paths: list[str], fixtures_path: str) -> list[SampleRecor
         with open(fixtures_path) as f:
             raw = json.load(f)
         fixtures = [SampleRecord(**d) for d in raw]
-    if not fixtures:
+    if fixtures:
+        _fixture_fallback_banner(f"analyzer.py not importable; using {fixtures_path}")
+    else:
+        _fixture_fallback_banner("analyzer.py not importable and no fixtures either")
         fixtures = [_placeholder_record()]
 
     records = []

@@ -28,6 +28,21 @@ except Exception:
 
 _records: dict[str, SampleRecord] = {}
 
+# True once this module has fallen back to fixtures/records.json instead of
+# real analyzer output. api.py reads this to warn in the UI.
+USING_FIXTURES = False
+
+
+def _fixture_fallback_banner(reason: str) -> None:
+    global USING_FIXTURES
+    USING_FIXTURES = True
+    line = "=" * 72
+    print(line, file=sys.stderr)
+    print("!!  index.py IS SEARCHING FIXTURES, NOT YOUR FOLDER  !!", file=sys.stderr)
+    print(f"!!  reason: {reason}", file=sys.stderr)
+    print("!!  every hit below comes from fixtures/records.json — fake data.", file=sys.stderr)
+    print(line, file=sys.stderr)
+
 # The persisted store is scratch state, not project data: it lives in
 # .cache/ (gitignored) so a stale index can never be committed and survive
 # into a later run the way it did when this sat inside fixtures/.
@@ -334,7 +349,7 @@ def _load_real_records(root: str) -> None:
         paths = [os.path.join(dp, f) for dp, _, fs in os.walk(root) for f in fs]
         upsert([analyze(p) for p in paths])
     except Exception as exc:
-        print(f"[index] analyzer unavailable ({exc}); falling back to fixtures", file=sys.stderr)
+        _fixture_fallback_banner(f"analyzer unavailable ({exc})")
         here = os.path.dirname(os.path.abspath(__file__))
         load(os.path.join(here, "fixtures", "records.json"))
 

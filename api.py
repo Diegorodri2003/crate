@@ -85,6 +85,33 @@ def _load_fixture_records() -> list[dict]:
 
 FIXTURE_RECORDS: list[dict] = _load_fixture_records()
 
+# True once this process has served fixture data instead of real analysis.
+USING_FIXTURES = False
+
+
+def _fixture_fallback_banner(reason: str) -> None:
+    global USING_FIXTURES
+    USING_FIXTURES = True
+    line = "=" * 72
+    print(line, file=sys.stderr)
+    print("!!  api.py IS SERVING FIXTURES, NOT REAL ANALYSIS  !!", file=sys.stderr)
+    print(f"!!  reason: {reason}", file=sys.stderr)
+    print("!!  everything the page shows is fake data from fixtures/records.json.", file=sys.stderr)
+    print(line, file=sys.stderr)
+
+
+def degraded_modules() -> list[str]:
+    """Which modules are running on fixtures right now — api's own fallbacks
+    plus the flags index.py and organiser.py set when they take theirs."""
+    degraded = []
+    if USING_FIXTURES or USE_FIXTURES:
+        degraded.append("api")
+    if getattr(index, "USING_FIXTURES", False):
+        degraded.append("index")
+    if getattr(organiser, "USING_FIXTURES", False):
+        degraded.append("organiser")
+    return degraded
+
 # --------------------------------------------------------------------------
 # In-memory state. "Nothing fancier" per the brief.
 # --------------------------------------------------------------------------
@@ -189,6 +216,7 @@ def status_payload() -> dict:
             "organiser": organiser is not None,
         },
         "missing": modules_missing(),
+        "degraded": degraded_modules(),
     }
 
 
@@ -240,6 +268,9 @@ def _run_scan_job(job_id: str, root: str) -> None:
                 except Exception:
                     pass  # search still works against whatever was already indexed
         else:
+            _fixture_fallback_banner(
+                f"scan unavailable (USE_FIXTURES={USE_FIXTURES}, missing={modules_missing()})"
+            )
             total = len(FIXTURE_RECORDS)
             with JOBS_LOCK:
                 JOBS[job_id]["total"] = total
@@ -274,6 +305,9 @@ def run_ingest(root: str) -> dict:
                 rec = _error_record(p, str(e))
             records.append(rec)
     else:
+        _fixture_fallback_banner(
+            f"scan unavailable (USE_FIXTURES={USE_FIXTURES}, missing={modules_missing()})"
+        )
         records = [to_record(r) for r in FIXTURE_RECORDS]
     LAST_SCAN_RECORDS = records
     indexed = 0
@@ -301,6 +335,9 @@ def build_plan(template: str | None) -> list[dict]:
         records = LAST_SCAN_RECORDS or []
         plans = organiser.plan(records, template or DEFAULT_TEMPLATE)
     else:
+        _fixture_fallback_banner(
+            f"plan unavailable (USE_FIXTURES={USE_FIXTURES}, missing={modules_missing()})"
+        )
         plans = [to_plan(p) for p in _fixture_plan(template)]
     LAST_PLANS = list(plans)
     return [to_dict(p) for p in plans]
@@ -385,6 +422,9 @@ def run_search(body: dict) -> list[dict]:
         hits = index.search(q)
         # Safety net: a reference upload must never be served as a library hit.
         return [_hit_to_dict(h) for h in hits if not _is_upload(getattr(h.record, "path", ""))]
+    _fixture_fallback_banner(
+        f"search unavailable (USE_FIXTURES={USE_FIXTURES}, missing={modules_missing()})"
+    )
     return _fixture_search(body)
 
 
@@ -468,6 +508,9 @@ def run_fit(temp_path: str, contrast: bool, limit: int = 20) -> list[dict]:
             return [_hit_to_dict(h) for h in hits]
         finally:
             index.remove(rec.path)
+    _fixture_fallback_banner(
+        f"fit unavailable (USE_FIXTURES={USE_FIXTURES}, missing={modules_missing()})"
+    )
     return _fixture_fit_hits(contrast, limit)
 
 
