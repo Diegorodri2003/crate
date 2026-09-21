@@ -221,6 +221,35 @@ def status_payload() -> dict:
 
 
 # --------------------------------------------------------------------------
+# /api/browse-folder — a REAL native OS folder picker. This only works
+# because the server and the browser are the same machine: a web page can
+# never hand a Python backend an absolute filesystem path (browsers strip
+# it on purpose), so instead we pop a native dialog server-side and return
+# whatever the user picked there.
+# --------------------------------------------------------------------------
+def browse_folder(initial: str) -> dict:
+    try:
+        import tkinter
+        from tkinter import filedialog
+    except Exception:
+        # not an error the UI needs to alarm over -- it just falls back to
+        # typing a path instead of a native dialog.
+        return {"path": None, "available": False}
+    start = initial.strip() if initial and os.path.isdir(initial.strip()) else os.path.expanduser("~")
+    root = tkinter.Tk()
+    root.withdraw()
+    try:
+        root.attributes("-topmost", True)
+    except Exception:
+        pass
+    try:
+        chosen = filedialog.askdirectory(initialdir=start, title="Choose a library folder")
+    finally:
+        root.destroy()
+    return {"path": chosen or None, "available": True}
+
+
+# --------------------------------------------------------------------------
 # /api/scan + /api/scan/{id}
 # --------------------------------------------------------------------------
 def start_scan(root: str) -> dict:
@@ -536,28 +565,13 @@ def _fixture_fit_hits(contrast: bool, limit: int) -> list[dict]:
 
 
 # --------------------------------------------------------------------------
-# /api/place (multipart upload) — drop ONE sample, get it analysed and
-# filed straight into {family}/{instrument}/... under the library root.
+# /api/place (multipart upload) — drop a sample (or many, or a whole folder
+# from the browser's side) and get each one analysed with whatever model is
+# actually loaded right now -- CLAP if it's installed, the filename-keyword
+# fallback otherwise -- and filed straight into {family}/{instrument}/...
+# under the library root. No shortcuts: if the model calls it "unsorted",
+# it goes to _unsorted/ same as a full Rescan would.
 # --------------------------------------------------------------------------
-def _confident_label(filename: str) -> tuple[str, str] | None:
-    """Same keyword table analyzer.py's own fallback classifier uses, but
-    without its confidence<0.5 bug: matches are accepted outright, and only
-    when every hit agrees on exactly one (family, instrument) pair."""
-    if analyzer is None:
-        return None
-    lower = filename.lower()
-    tokens = set(re.split(r"[^a-z0-9]+", lower)) - {""}
-    whole_token_only = {"hh", "hat", "sub", "pad", "arp", "tom", "bass", "lead", "vox"}
-    hits = set()
-    for needle, family, instrument in getattr(analyzer, "_FILENAME_KEYWORDS", []):
-        matched = (needle in tokens) if needle in whole_token_only else (needle in lower)
-        if matched:
-            hits.add((family, instrument))
-    if len(hits) == 1:
-        return next(iter(hits))
-    return None
-
-
 def place_available() -> bool:
     return analyzer is not None and organiser is not None
 
@@ -592,11 +606,6 @@ def handle_place_sample(original_filename: str, file_bytes: bytes, library_root:
         # rather than silently discarding it; the next full Rescan will pick
         # it up too, so nothing is ever truly stuck.
         return {"error": f"could not read {safe_name}: {rec.error} (left at {temp_path})"}
-
-    label = _confident_label(safe_name)
-    if label:
-        family, instrument = label
-        rec = replace(rec, family=family, instrument=instrument, confidence=max(rec.confidence, 0.92))
 
     plans = organiser.plan([rec], DEFAULT_TEMPLATE)
     p = plans[0]
@@ -786,6 +795,9 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path, qs = parsed.path, parse_qs(parsed.query)
         try:
+            if path == "/api/browse-folder":
+                body = self._read_json()
+                return self._json(browse_folder(body.get("initial", "")))
             if path == "/api/scan":
                 body = self._read_json()
                 return self._json(start_scan(body.get("root", "")))
@@ -849,9 +861,26 @@ class Handler(BaseHTTPRequestHandler):
         return handle_place_sample(file_field.get("filename") or "sample.wav", file_field["data"], library_root)
 
 
+def _ensure_demo_messy_folder() -> None:
+    """First run on a fresh clone: messy/ is gitignored, so there is nothing
+    to Rescan or drop samples into yet. Generate a small synthetic demo
+    library so Scan/Search/Place all have something to work with immediately
+    -- never touches messy/ if it already exists (e.g. a real library)."""
+    default_root = os.path.join(HERE, "messy")
+    if os.path.isdir(default_root):
+        return
+    try:
+        import make_fixtures
+        make_fixtures.make_messy(out=default_root)
+        print(f"[api] messy/ did not exist -- generated a synthetic demo library at {default_root}")
+    except Exception as exc:
+        print(f"[api] could not generate a demo messy/ folder: {exc}", file=sys.stderr)
+
+
 def run_server(port: int = 8000) -> None:
     if modules_missing():
         print(f"[api] running with fixtures — not live yet: {', '.join(modules_missing())}")
+    _ensure_demo_messy_folder()
     print(f"[api] USE_FIXTURES={USE_FIXTURES}  http://127.0.0.1:{port}/")
     ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
 

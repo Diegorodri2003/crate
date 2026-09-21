@@ -29,20 +29,21 @@ Then open `http://127.0.0.1:8000/`. `api.py` itself needs nothing beyond the sta
 
 ## The interface
 
-### Drop a sample, get it filed away
+### Drop samples, get them filed away
 
-The circle in the middle is the whole point of the app in miniature: drop one audio file on it (or click to pick one), and it gets analysed, labelled, and moved straight into `family/instrument/...` under your library folder — for real, on disk. If the name isn't a confident match for anything, it lands in `_unsorted/` instead of a guess.
+The circle in the middle is the whole point of the app in miniature: drop one file, a batch of files, or an entire folder on it, and every audio file in there gets analysed and moved straight into `family/instrument/...` under your library folder — for real, on disk, one `organiser.apply()` per file with its own undo log. It uses whatever model is actually loaded, no shortcuts: without CLAP that's the filename fallback, which is honest about being unsure a lot of the time and sends most things to `_unsorted/` rather than guess. Install CLAP and it gets a lot better at this without any other change.
 
 <p align="center">
-  <img src="static/readme-shots/04-place.png" width="380" alt="Dropping a sample onto the circle files it into Drums/snare">
+  <img src="static/readme-shots/09-place-batch.png" width="380" alt="Dropping three samples at once — the circle reports how many were filed and how many landed in unsorted">
 </p>
 
 ### Search your library
 
-Type what you're after — a word, an instrument, a vibe — and it ranks the library against it. Family, type (one-shot/loop), key and BPM filters sit right underneath if you want to narrow it down further. Clicking a result plays it through the bar at the bottom.
+Type what you're after — a word, an instrument, a vibe — and it ranks the library against it. Family, type (one-shot/loop), key and BPM filters sit right underneath if you want to narrow it down further; key is a real dropdown, not a button you have to click through one option at a time. Clicking a result plays it through the bar at the bottom.
 
 <p align="center">
   <img src="static/readme-shots/02-search.png" width="380" alt="Searching for kick returns ranked matches">
+  <img src="static/readme-shots/08-key-dropdown.png" width="380" alt="The key filter is a plain dropdown">
 </p>
 
 ### Fit a reference track
@@ -56,6 +57,10 @@ The **FIT TRACK** button in the left rail takes a bounce of whatever you're work
 ### Rescan and reorganise, safely
 
 **RESCAN FOLDERS** walks your library folder and re-analyses everything in it, then builds a full reorganise plan automatically. Nothing happens to your files yet — **View diff** shows exactly what would move and why before you touch **Apply**, and **Undo** is one click for as long as the session lasts.
+
+The folder button at the top right (showing `messy`) opens a real native folder picker — the browser itself can't hand a website an absolute filesystem path, so clicking it asks the Python server to pop the OS's own folder dialog and hand back whatever you picked there. Point it anywhere on disk and Rescan/Place both work on that folder from then on. (If the machine has no desktop environment for that dialog to open on, it quietly falls back to typing a path.)
+
+First run, with no library yet? `messy/` is gitignored on purpose — nobody wants a stranger's demo audio in their git history — so `api.py` notices it's missing on startup and generates a small synthetic one automatically, just so Scan/Search/Place have something to chew on immediately.
 
 <p align="center">
   <img src="static/readme-shots/07-plan.png" width="380" alt="The reorganise plan drawer showing proposed moves before applying">

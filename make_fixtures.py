@@ -89,8 +89,8 @@ def tone_wav(path, freq, dur, sr=44100, noise=0.0):
         w.writeframes(bytes(frames))
 
 
-def make_messy(source=None):
-    out = "messy"
+def make_messy(source=None, out=None):
+    out = out or "messy"
     shutil.rmtree(out, ignore_errors=True)
     subdirs = ["", "New Folder", "New Folder/untitled", "packs/VOL 2",
                "from dani", "DRUMS!!!!", "downloads"]
