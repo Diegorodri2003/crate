@@ -297,6 +297,20 @@ def _validate_batch(plans: list[RenamePlan]) -> None:
             )
 
 
+def _dirs_to_create(path: str) -> list[str]:
+    """The ancestors of `path` (shallowest first) that do not exist yet, i.e.
+    exactly the directories a makedirs(path) call would bring into being."""
+    missing: list[str] = []
+    current = os.path.abspath(path)
+    while current and not os.path.isdir(current):
+        missing.append(current)
+        parent = os.path.dirname(current)
+        if parent == current:
+            break
+        current = parent
+    return list(reversed(missing))
+
+
 def apply(plans: list[RenamePlan], dry_run: bool = True) -> str:
     """Perform (or simulate) the moves in `plans`.
 
@@ -308,6 +322,9 @@ def apply(plans: list[RenamePlan], dry_run: bool = True) -> str:
     OrganiserError is raised and NOT ONE file is moved. Only once validation
     passes do we write the undo log (one line per move, written before that
     move happens) and perform the moves with shutil.move.
+
+    Every directory this call creates is recorded in the log too, so undo()
+    can leave the library exactly as it found it.
     """
     plans = list(plans)
     if not plans:
@@ -334,6 +351,10 @@ def apply(plans: list[RenamePlan], dry_run: bool = True) -> str:
 
             parent = os.path.dirname(p.new_path)
             if parent:
+                for created in _dirs_to_create(parent):
+                    log_f.write(json.dumps({"mkdir": created}) + "\n")
+                    log_f.flush()
+                    os.fsync(log_f.fileno())
                 os.makedirs(parent, exist_ok=True)
             shutil.move(p.old_path, p.new_path)
 
@@ -342,8 +363,12 @@ def apply(plans: list[RenamePlan], dry_run: bool = True) -> str:
 
 def undo(log_path: str) -> None:
     """Replay an undo log in reverse, restoring every moved file to where
-    it came from. Never overwrites, never deletes; tolerant of a partially
-    completed forward run so it stays useful even after a crash."""
+    it came from. Never overwrites, never deletes a file; tolerant of a
+    partially completed forward run so it stays useful even after a crash.
+
+    The empty directories apply() created are removed afterwards (deepest
+    first, os.rmdir only, only when empty and only when this log says apply()
+    created them) so the library is left exactly as apply() found it."""
     entries = []
     with open(log_path) as f:
         for line in f:
@@ -352,7 +377,11 @@ def undo(log_path: str) -> None:
                 continue
             entries.append(json.loads(line))
 
+    created_dirs: list[str] = []
     for entry in reversed(entries):
+        if "mkdir" in entry:
+            created_dirs.append(entry["mkdir"])
+            continue
         src, dst = entry["to"], entry["from"]
         if not os.path.exists(src):
             print(f"organiser: undo skip (missing source): {src}", file=sys.stderr)
@@ -364,6 +393,18 @@ def undo(log_path: str) -> None:
         if parent:
             os.makedirs(parent, exist_ok=True)
         shutil.move(src, dst)
+
+    # Deepest first, so a child is gone before its parent is considered.
+    for directory in sorted(set(created_dirs), key=lambda d: d.count(os.sep), reverse=True):
+        if not os.path.isdir(directory):
+            continue
+        if os.listdir(directory):
+            print(f"organiser: undo keeping non-empty directory: {directory}", file=sys.stderr)
+            continue
+        try:
+            os.rmdir(directory)
+        except OSError as exc:
+            print(f"organiser: undo could not remove directory {directory}: {exc}", file=sys.stderr)
 
 
 # --------------------------------------------------------------------------
