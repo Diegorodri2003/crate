@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+messy/
+fixtures/records.json
+fixtures/index.json
+undo/
+*.log
