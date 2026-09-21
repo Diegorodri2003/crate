@@ -33,12 +33,18 @@ _records: dict[str, SampleRecord] = {}
 # into a later run the way it did when this sat inside fixtures/.
 STORE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".cache", "index.json")
 
-# storage: upsert / clear / all_records / save / load
+# storage: upsert / remove / clear / all_records / save / load
 
 def upsert(records: list[SampleRecord]) -> None:
     """Insert or replace records by path (the primary key)."""
     for r in records:
         _records[r.path] = r
+
+def remove(path: str) -> None:
+    """Drop one record by path. A reference upload (a bounce sent to /fit)
+    is only in the store so fit_to can look it up — it is removed again the
+    moment that is done, so it never shows up as an ordinary library hit."""
+    _records.pop(path, None)
 
 def clear() -> None:
     """Drop every record. Callers that (re)ingest a folder call this first so

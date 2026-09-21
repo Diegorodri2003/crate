@@ -23,7 +23,6 @@ import random
 import re
 import struct
 import sys
-import tempfile
 import threading
 import time
 import uuid
@@ -69,6 +68,9 @@ from contracts import SearchQuery, SampleRecord, RenamePlan
 HERE = os.path.dirname(os.path.abspath(__file__))
 FIXTURES_PATH = os.path.join(HERE, "fixtures", "records.json")
 STATIC_DIR = os.path.join(HERE, "static")
+# Reference bounces uploaded to /api/fit land here — one known place, outside
+# any sample library, so search can recognise and exclude them.
+UPLOAD_DIR = os.path.join(HERE, ".cache", "uploads")
 
 DEFAULT_TEMPLATE = "{family}/{instrument}/{descriptor}_{keyOrBpm}_{type}_{stem}{ext}"
 
@@ -381,8 +383,18 @@ def run_search(body: dict) -> list[dict]:
             limit=int(body.get("limit", 50)),
         )
         hits = index.search(q)
-        return [_hit_to_dict(h) for h in hits]
+        # Safety net: a reference upload must never be served as a library hit.
+        return [_hit_to_dict(h) for h in hits if not _is_upload(getattr(h.record, "path", ""))]
     return _fixture_search(body)
+
+
+def _is_upload(path: str) -> bool:
+    if not path:
+        return False
+    try:
+        return os.path.commonpath([os.path.abspath(path), UPLOAD_DIR]) == UPLOAD_DIR
+    except ValueError:
+        return False
 
 
 def _hit_to_dict(hit) -> dict:
@@ -450,9 +462,12 @@ def run_fit(temp_path: str, contrast: bool, limit: int = 20) -> list[dict]:
         # index.search()'s fit_to looks the reference up by path in its own
         # store — it has to be upserted first or the lookup misses.
         index.upsert([rec])
-        q = SearchQuery(fit_to=temp_path, limit=limit, contrast=contrast)
-        hits = index.search(q)
-        return [_hit_to_dict(h) for h in hits]
+        try:
+            q = SearchQuery(fit_to=rec.path, limit=limit, contrast=contrast)
+            hits = index.search(q)
+            return [_hit_to_dict(h) for h in hits]
+        finally:
+            index.remove(rec.path)
     return _fixture_fit_hits(contrast, limit)
 
 
@@ -658,17 +673,11 @@ class Handler(BaseHTTPRequestHandler):
                 contrast = fields["contrast"]["data"].strip().lower() == "true"
             if file_field and file_field.get("data"):
                 suffix = os.path.splitext(file_field.get("filename") or "upload.wav")[1] or ".wav"
-                fd, temp_path = tempfile.mkstemp(suffix=suffix, prefix="crate_fit_")
-                with os.fdopen(fd, "wb") as f:
+                os.makedirs(UPLOAD_DIR, exist_ok=True)
+                temp_path = os.path.join(UPLOAD_DIR, f"fit_{uuid.uuid4().hex[:12]}{suffix}")
+                with open(temp_path, "wb") as f:
                     f.write(file_field["data"])
-        try:
-            return run_fit(temp_path or "", contrast)
-        finally:
-            if temp_path and os.path.exists(temp_path):
-                try:
-                    os.remove(temp_path)
-                except OSError:
-                    pass
+        return run_fit(temp_path or "", contrast)
 
 
 def run_server(port: int = 8000) -> None:
