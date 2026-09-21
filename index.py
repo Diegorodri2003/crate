@@ -4,24 +4,27 @@ Pure functions over the shapes in contracts.py. No database: upsert()
 keeps records in a module-level dict keyed by `path`, and save()/load()
 persist that dict as plain JSON. That dict is the only mutable state.
 
-`_embed_text` is a deterministic hashed pseudo-embedding standing in for
-the CLAP text encoder analyzer.py doesn't have yet — a drop-in swap later.
+Text search uses analyzer.embed_text (a real CLAP text encoder) when it's
+importable and a record has an embedding; otherwise it always falls back
+to fuzzy matching over filename/instrument/family/descriptors — no hash-
+based placeholder embedding, since that only produced noise rankings.
 
 CLI demo: python index.py "dark kick"
 """
 
-import hashlib
 import json
 import math
 import os
 import re
 import sys
 from dataclasses import asdict
-from difflib import SequenceMatcher
 
 from contracts import BANDS_HZ, SampleRecord, SearchHit, SearchQuery
 
-_EMBED_DIM = 512
+try:
+    from analyzer import embed_text
+except Exception:
+    embed_text = None
 
 _records: dict[str, SampleRecord] = {}
 
@@ -55,16 +58,6 @@ def _cosine(a, b) -> float:
     if na == 0 or nb == 0:
         return 0.0
     return dot / (na * nb)
-
-def _embed_text(text: str) -> list[float]:
-    """Deterministic hashed bag-of-words vector, same width as
-    SampleRecord.embedding so cosine similarity is always well-defined."""
-    vec = [0.0] * _EMBED_DIM
-    for tok in re.findall(r"[a-z0-9]+", text.lower()):
-        idx = int.from_bytes(hashlib.md5(tok.encode()).digest()[:4], "big") % _EMBED_DIM
-        vec[idx] += 1.0
-    norm = math.sqrt(sum(v * v for v in vec))
-    return [v / norm for v in vec] if norm else vec
 
 # key / circle-of-fifths helpers
 
@@ -161,30 +154,48 @@ def _passes_filters(r: SampleRecord, q: SearchQuery) -> list[str] | None:
 
 # text scoring
 
-def _text_score(r: SampleRecord, q_text: str, q_embedding: list[float]) -> tuple[float, list[str]]:
-    reasons: list[str] = []
-    tokens = re.findall(r"[a-z0-9]+", q_text.lower())
+def _hits(token: str, value: str) -> bool:
+    return token in value or value in token
 
-    hit_descriptors = [d for d in r.descriptors if d.lower() in tokens]
-    if hit_descriptors:
-        reasons.append("matches " + ", ".join(hit_descriptors))
 
-    if r.embedding is not None:
+def _fuzzy_score(r: SampleRecord, tokens: list[str]) -> tuple[float, list[str]]:
+    """Match query tokens against instrument + descriptors (high weight)
+    and family + filename (low weight). Case-insensitive; a token counts
+    as a hit on partial (substring) overlap, not just exact equality."""
+    if not tokens:
+        return 0.0, []
+
+    instrument = r.instrument.lower()
+    family = r.family.lower()
+    filename = r.filename.lower()
+    descriptors = [d.lower() for d in r.descriptors]
+
+    HIGH, LOW = 1.0, 0.35
+    matched: list[str] = []
+    total = 0.0
+    for t in tokens:
+        if _hits(t, instrument) or any(_hits(t, d) for d in descriptors):
+            total += HIGH
+            matched.append(t)
+        elif _hits(t, family) or t in filename:
+            total += LOW
+            matched.append(t)
+
+    score = min(1.0, total / (len(tokens) * HIGH))
+    reasons = [f"matched: {', '.join(matched)}"] if matched else []
+    return score, reasons
+
+
+def _text_score(r: SampleRecord, q_text: str, q_embedding: list[float] | None) -> tuple[float, list[str]]:
+    if q_embedding is not None and r.embedding is not None:
         sim = _cosine(q_embedding, r.embedding)
         score = max(0.0, min(1.0, (sim + 1) / 2))
-        reasons.append("semantic match")
-        return score, reasons
+        return score, ["matched: semantic embedding"]
 
-    # No embedding for this record (e.g. it errored out): fall back to
-    # fuzzy text matching over filename + instrument + family + descriptors.
-    haystack = " ".join([r.filename, r.instrument, r.family, *r.descriptors]).lower()
-    score = SequenceMatcher(None, q_text.lower(), haystack).ratio()
-    token_hits = sum(1 for t in tokens if t in haystack)
-    if tokens:
-        score = max(score, token_hits / len(tokens))
-    if token_hits:
-        reasons.append("keyword match in filename/tags")
-    return score, reasons
+    # No usable embedding path for this query/record: always fuzzy-match
+    # over filename + instrument + family + descriptors, never a hash.
+    tokens = re.findall(r"[a-z0-9]+", q_text.lower())
+    return _fuzzy_score(r, tokens)
 
 # fit-to-reference scoring
 
@@ -244,7 +255,12 @@ def _fit_score(candidate: SampleRecord, reference: SampleRecord, contrast: bool)
 # search
 
 def search(q: SearchQuery) -> list[SearchHit]:
-    q_embedding = _embed_text(q.text) if q.text else None
+    q_embedding = None
+    if q.text and embed_text is not None:
+        try:
+            q_embedding = embed_text(q.text)
+        except Exception:
+            q_embedding = None
     reference = _records.get(q.fit_to) if q.fit_to else None
 
     hits: list[SearchHit] = []
