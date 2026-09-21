@@ -169,6 +169,35 @@ def _classify_with_clap(y: np.ndarray, sr: int) -> Optional[tuple[str, str, floa
         return None
 
 
+def embed_text(text: str) -> Optional[list[float]]:
+    """Embed a text query with the same CLAP text encoder used for the
+    zero-shot prompts, into the same 512-dim space as SampleRecord.embedding.
+
+    Returns None when CLAP is not loaded (or cannot be), so callers can fall
+    back to their own matching instead of comparing against a fake vector.
+    """
+    if not text or not text.strip():
+        return None
+    model, processor = _load_clap()
+    if model is None or processor is None:
+        return None
+    try:
+        import torch
+
+        inputs = processor(text=[text], return_tensors="pt", padding=True)
+        with torch.no_grad():
+            features = model.get_text_features(**inputs)
+        # transformers returns either the projected tensor itself or an output
+        # object carrying it, depending on version.
+        for attr in ("text_embeds", "pooler_output"):
+            if hasattr(features, attr):
+                features = getattr(features, attr)
+                break
+        return _fit_dim(features[0].tolist())
+    except Exception:
+        return None
+
+
 def _classify_fallback(filename: str) -> tuple[str, str, float]:
     lower = filename.lower()
     for needle, family, instrument in _FILENAME_KEYWORDS:
