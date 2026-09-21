@@ -290,9 +290,22 @@ def _print_hits(hits: list[SearchHit]) -> None:
         print(f"{rank:>2}. {hit.score:.3f}  {hit.record.filename}")
         print(f"      {' | '.join(hit.reasons)}")
 
+def _load_real_records(root: str) -> None:
+    """Analyse every file under root with analyzer.analyze(). Falls back to
+    the JSON fixtures (with a banner) if analyzer.py is missing or broken,
+    so the demo still runs."""
+    try:
+        from analyzer import analyze
+        paths = [os.path.join(dp, f) for dp, _, fs in os.walk(root) for f in fs]
+        upsert([analyze(p) for p in paths])
+    except Exception as exc:
+        print(f"[index] analyzer unavailable ({exc}); falling back to fixtures", file=sys.stderr)
+        here = os.path.dirname(os.path.abspath(__file__))
+        load(os.path.join(here, "fixtures", "records.json"))
+
+
 if __name__ == "__main__":
-    fixtures_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "records.json")
-    load(fixtures_path)
+    _load_real_records(os.path.join(os.path.dirname(os.path.abspath(__file__)), "messy"))
 
     query_text = " ".join(sys.argv[1:]) or None
     _print_hits(search(SearchQuery(text=query_text, limit=10)))
