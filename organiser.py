@@ -18,9 +18,9 @@ Non-negotiable rules this file obeys everywhere:
     - A destination that already exists aborts the *whole* batch before a
       single file is touched. We never overwrite.
 
-There is no analyzer.py yet, so the CLI at the bottom develops against
-fixtures/records.json: it pairs real scanned files with fixture analysis
-data so the plan/apply/undo loop can be exercised end-to-end on messy/.
+The CLI at the bottom uses analyzer.analyze() for real records when
+analyzer.py is importable, and falls back to fixtures/records.json (or a
+placeholder) if it isn't — this module must keep working either way.
 """
 
 from __future__ import annotations
@@ -38,6 +38,14 @@ from dataclasses import replace
 from datetime import datetime
 
 from contracts import RenamePlan, SampleRecord
+
+# Defensive import: analyzer.py is A's module, not ours. If it isn't present
+# or fails to import, the CLI below falls back to fixtures/records.json
+# instead of taking the whole tool down.
+try:
+    import analyzer as _analyzer
+except Exception:
+    _analyzer = None
 
 # --------------------------------------------------------------------------
 # scan()
@@ -375,8 +383,23 @@ def _placeholder_record() -> SampleRecord:
 
 
 def _load_demo_records(paths: list[str], fixtures_path: str) -> list[SampleRecord]:
-    """Pair real scanned files with fixture analysis data (round-robin) so
-    plan()/apply()/undo() can be exercised without analyzer.py."""
+    """Analyze real files with analyzer.analyze() when it's importable.
+    Falls back to fixture analysis data (round-robin) if analyzer.py isn't
+    available, so plan()/apply()/undo() can still be exercised."""
+    if _analyzer is not None:
+        records = []
+        for p in paths:
+            try:
+                records.append(_analyzer.analyze(p))
+            except Exception as exc:
+                # analyzer.analyze() is contracted to never raise; if it
+                # does anyway, degrade to _unsorted rather than crash here.
+                records.append(replace(
+                    _placeholder_record(), path=p, filename=os.path.basename(p),
+                    error=f"analyzer.analyze() raised: {exc}",
+                ))
+        return records
+
     fixtures: list[SampleRecord] = []
     if fixtures_path and os.path.exists(fixtures_path):
         with open(fixtures_path) as f:
