@@ -321,8 +321,8 @@ def search(q: SearchQuery) -> list[SearchHit]:
 
         score = sum(scores) / len(scores) if scores else 1.0
 
-        if len(reasons) < 2:
-            reasons.append(f"{r.instrument} · {r.family}")
+        # family/instrument already shows in the row's meta line -- no need
+        # to pad reasons with a duplicate of it here.
         reasons = reasons[:4]
 
         hits.append(SearchHit(record=r, score=round(score, 4), reasons=reasons))

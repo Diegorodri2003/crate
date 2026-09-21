@@ -504,7 +504,7 @@ def _fixture_search(query: dict) -> list[dict]:
             continue
 
         score = 0.4 + 0.3 * rec.get("confidence", 0.5)
-        reasons = [f"{rec.get('family')} / {rec.get('instrument')}"]
+        reasons = []  # family/instrument/bpm/key already show in the row's meta line
         if text:
             hay = " ".join([
                 rec.get("filename", ""), rec.get("family", ""), rec.get("instrument", ""),
@@ -513,11 +513,7 @@ def _fixture_search(query: dict) -> list[dict]:
             if text not in hay:
                 continue
             score += 0.3
-            reasons.insert(0, f"matches \u201c{text}\u201d")
-        if rec.get("bpm"):
-            reasons.append(f"{rec['bpm']} BPM")
-        if rec.get("key"):
-            reasons.append(f"key {rec['key']}")
+            reasons.append(f"matches \u201c{text}\u201d")
         hits.append({"record": strip_heavy(rec), "score": round(min(score, 1.0), 3), "reasons": reasons})
 
     hits.sort(key=lambda h: -h["score"])
@@ -553,7 +549,7 @@ def _fixture_fit_hits(contrast: bool, limit: int) -> list[dict]:
     for rec in picks:
         base = rec.get("confidence", 0.5)
         score = round(min(1.0, base * (0.5 if contrast else 1.0) + rnd.uniform(0.0, 0.35)), 3)
-        reasons = [f"{rec['family']} / {rec['instrument']}"]
+        reasons = []  # family/instrument already shows in the row's meta line
         if rec.get("bpm"):
             delta = rnd.uniform(-4, 4)
             pct = round(delta / rec["bpm"] * 100, 1)
