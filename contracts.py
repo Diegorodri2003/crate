@@ -12,7 +12,9 @@ Every module is a pure function over these types:
        index.search(query)            -> list[SearchHit]
     C  organiser.scan(root)           -> list[str]
        organiser.plan(records, tmpl)  -> list[RenamePlan]
-       organiser.apply(plans)         -> str          (path of undo log)
+       organiser.apply(plans, dry_run=True)
+                                      -> str   (path of undo log; "" on a
+                                                dry run, which moves nothing)
        organiser.undo(log_path)       -> None
     D  api.py wires all of the above to HTTP + one HTML page.
 """
