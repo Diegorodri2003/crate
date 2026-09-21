@@ -393,7 +393,9 @@ def do_apply(dry_run: bool) -> dict:
 def do_undo(log) -> dict:
     if apply_available() and isinstance(log, str) and os.path.exists(log):
         with open(log) as f:
-            restored = sum(1 for line in f if line.strip())
+            # the log also carries the directories apply() created — only the
+            # move entries count as restored files
+            restored = sum(1 for line in f if line.strip() and "from" in json.loads(line))
         organiser.undo(log)
         return {"restored": restored}
     plans = UNDO_LOGS.pop(log, None) if isinstance(log, str) else None
