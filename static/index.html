@@ -1,196 +1,325 @@
-<!DOCTYPE html>
+<!DOCTYPE HTML>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>crate</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#0b0d10; --panel:#14181d; --panel-2:#1b2027; --border:#2b323b;
-    --text:#f3f5f7; --muted:#9aa5b1; --accent:#ffb454; --accent-2:#4fd1c5;
-    --bad:#ff6b6b; --good:#57e389;
+    --bg:#8f8f8c; --card:#d7d6d3; --panel:#cfcecb; --panel-2:#c9c8c4; --panel-3:#dcdbd8;
+    --field:#e6e5e2; --border:rgba(0,0,0,.12); --border-soft:rgba(0,0,0,.08);
+    --text:#15140f; --text-2:#1d1c1a; --muted:#57564f; --muted-2:#77766f; --muted-3:#8d8c85;
+    --accent:#d4561c; --accent-hover:#c04c14; --accent-ink:#fff;
+    --good:#4f9a6a; --bad:#b3261e; --bad-bg:#f3e3e0;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
-    font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
-  h1,h2,h3{margin:0 0 8px;}
-  h1{font-size:22px;letter-spacing:.04em;text-transform:uppercase;color:var(--accent);}
-  h2{font-size:18px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
+    font:15px/1.4 Archivo,system-ui,sans-serif;}
+  h1,h2{margin:0;}
+  a{color:var(--accent);}
+  a:hover{color:var(--accent-hover);}
   button{
-    font:600 15px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    background:var(--panel-2); color:var(--text); border:1px solid var(--border);
-    border-radius:6px; padding:10px 16px; cursor:pointer;
+    font:500 13px/1 Archivo,sans-serif; background:var(--panel-2); color:var(--text-2);
+    border:1px solid var(--border); border-radius:8px; padding:9px 14px; cursor:pointer;
   }
-  button:hover{border-color:var(--accent);}
+  button:hover{background:#c0bfbb;}
   button:disabled{opacity:.4; cursor:not-allowed;}
-  button.primary{background:var(--accent); color:#1a1200; border-color:var(--accent);}
-  button.danger{background:var(--bad); color:#200; border-color:var(--bad);}
+  button:focus-visible, input:focus-visible, textarea:focus-visible{outline:2px solid var(--accent); outline-offset:1px;}
+  button.primary{background:var(--accent); color:var(--accent-ink); border-color:var(--accent);}
+  button.primary:hover{background:var(--accent-hover);}
+  button.danger{background:var(--bad); color:#fff; border-color:var(--bad);}
+  button.ghost{background:transparent;}
   input[type=text], input[type=number]{
-    font-size:15px; background:var(--panel-2); color:var(--text);
-    border:1px solid var(--border); border-radius:6px; padding:9px 10px;
+    font:14px Archivo,sans-serif; background:var(--field); color:var(--text);
+    border:1px solid var(--border); border-radius:6px; padding:8px 10px;
   }
-  input:focus{outline:2px solid var(--accent-2);}
+  label.field-label{display:block; font:600 12px Archivo,sans-serif; color:var(--muted-3); margin-bottom:6px;}
   .chip{
-    display:inline-flex; align-items:center; gap:4px; font-size:14px;
+    display:inline-flex; align-items:center; gap:5px; font:500 12px "JetBrains Mono",monospace;
     background:var(--panel-2); border:1px solid var(--border); border-radius:999px;
-    padding:6px 12px; cursor:pointer; user-select:none; color:var(--muted);
+    padding:6px 11px; cursor:pointer; user-select:none; color:var(--muted);
   }
-  .chip.active{border-color:var(--accent-2); color:var(--accent-2); background:#132a29;}
-  .chip.reason{cursor:default; color:var(--muted); font-size:13.5px;}
+  .chip.active{border-color:var(--accent); color:var(--accent); background:#f3ddd0;}
+  .chip.reason{cursor:default; color:var(--muted-2); font-size:11px;}
+  .mono{font-family:"JetBrains Mono",monospace;}
+  .muted{color:var(--muted-2); font-size:13px;}
+  .row{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+
   #banner{
-    display:none; background:#3a2a10; color:var(--accent); border-bottom:2px solid var(--accent);
-    padding:10px 20px; font-size:15px; font-weight:600;
+    display:none; background:#f3ddd0; color:var(--accent-hover); border-bottom:2px solid var(--accent);
+    padding:10px 20px; font:600 13px Archivo,sans-serif;
   }
   #errors{
-    position:fixed; top:12px; right:12px; z-index:999; display:flex;
-    flex-direction:column; gap:8px; max-width:420px;
+    position:fixed; top:14px; right:14px; z-index:999; display:flex;
+    flex-direction:column; gap:8px; max-width:calc(100vw - 28px); width:360px;
   }
   .toast{
-    background:#2a1010; border:1px solid var(--bad); color:#ffd7d7;
-    padding:10px 14px; border-radius:8px; font-size:14px; box-shadow:0 4px 14px rgba(0,0,0,.4);
+    background:var(--bad-bg); border:1px solid var(--bad); color:var(--bad);
+    padding:10px 14px; border-radius:8px; font-size:13px; box-shadow:0 4px 14px rgba(0,0,0,.25);
   }
-  main.grid{
-    display:grid; grid-template-columns:1fr 1fr; grid-auto-rows:auto;
-    gap:16px; padding:16px 16px 120px;
-  }
-  .panel{
-    background:var(--panel); border:1px solid var(--border); border-radius:10px;
-    padding:16px 18px; min-width:0;
-  }
-  .panel-scan{grid-column:1; grid-row:1;}
-  .panel-search{grid-column:2; grid-row:1;}
-  .panel-plan{
-    grid-column:1 / span 2; grid-row:2; border-color:var(--accent);
-    box-shadow:0 0 0 1px var(--accent) inset;
-  }
-  .panel-fit{grid-column:1 / span 2; grid-row:3;}
-  @media (max-width:900px){
-    main.grid{grid-template-columns:1fr;}
-    .panel-scan,.panel-search,.panel-plan,.panel-fit{grid-column:1;}
-    .panel-scan{grid-row:1;} .panel-search{grid-row:2;} .panel-plan{grid-row:3;} .panel-fit{grid-row:4;}
-  }
-  .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
-  .row + .row{margin-top:10px;}
-  progress{width:100%; height:20px; accent-color:var(--accent);}
-  .muted{color:var(--muted); font-size:14px;}
-  .mono{font-family:"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;}
 
-  /* PLAN — the centerpiece */
-  #plan-list{max-height:520px; overflow:auto; margin-top:12px; border-radius:8px;}
+  /* one narrow, vertical column -- the whole page reads top to bottom */
+  .wrap{max-width:480px; margin:0 auto; padding:24px 24px 110px;}
+  .card{
+    background:var(--card); border-radius:14px; overflow:hidden;
+    box-shadow:0 24px 60px rgba(0,0,0,.28), 0 0 0 1px rgba(0,0,0,.14);
+  }
+  .titlebar{
+    height:32px; background:var(--panel); border-bottom:1px solid var(--border);
+    display:flex; align-items:center; padding:0 12px; gap:6px;
+  }
+  .titlebar .dots{display:flex; gap:6px;}
+  .titlebar .dot{width:10px; height:10px; border-radius:50%; background:#bdbcb9; border:1px solid rgba(0,0,0,.14);}
+  .titlebar .name{flex:1; text-align:center; font:500 11.5px Archivo,sans-serif; color:var(--muted); letter-spacing:.02em; margin-right:32px;}
+
+  .topbar{padding:14px 16px 0; display:flex; align-items:center; justify-content:space-between; gap:10px;}
+  .brand{display:flex; align-items:center; gap:9px;}
+  .brand .mark{width:22px; height:22px; border-radius:5px; background:var(--text-2); display:grid; place-items:center;}
+  .brand .mark span{width:9px; height:9px; border:2px solid #e9e8e5; border-radius:2px; transform:rotate(45deg);}
+  .brand .word{font:800 13px/1 Archivo,sans-serif; letter-spacing:.14em; color:var(--text-2);}
+
+  #library-btn{display:flex; align-items:center; gap:7px; max-width:190px; padding:5px 9px;}
+  #library-btn .status-dot{width:5px; height:5px; border-radius:50%; background:var(--good); flex:none;}
+  #library-btn .path{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:500 11px "JetBrains Mono",monospace;}
+
+  /* rail (Fit + Rescan) sits beside the Place circle, exactly like the brief */
+  .toprow{padding:12px 16px 0; display:flex; gap:12px; align-items:stretch;}
+  .rail{display:flex; flex-direction:column; gap:8px; width:60px; flex:none; padding-top:44px;}
+  .rail button{width:60px; height:62px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; padding:0;}
+  .rail #scan-btn .icon{width:15px; height:15px; border:2px solid currentColor; border-radius:50%; border-top-color:transparent; transform:rotate(45deg);}
+  .rail .label{font:600 8.5px "JetBrains Mono",monospace; letter-spacing:.04em; text-align:center; line-height:1.15;}
+  .rail .status{font:400 9px/1.3 "JetBrains Mono",monospace; color:var(--muted-2); text-align:center;}
+  .rail .status.needs{color:var(--accent-hover); cursor:pointer; text-decoration:underline;}
+  .dot-icon{width:13px; height:13px; border-radius:50%; background:var(--panel-3); box-shadow:0 0 0 2px rgba(0,0,0,.12) inset;}
+  #fit-track-btn.active{background:var(--accent); color:#fff;}
+  #fit-track-btn.active .dot-icon{background:#fff; box-shadow:0 0 0 3px rgba(255,255,255,.25);}
+
+  .place-col{flex:1; min-width:0; display:flex; flex-direction:column; align-items:center;}
+  .place-zone{
+    flex:none; width:186px; height:186px; border-radius:50%; position:relative;
+    display:grid; place-items:center; cursor:copy; padding:0;
+    background:radial-gradient(circle at 50% 50%,var(--panel) 0%,var(--panel-2) 70%,#c2c1bd 100%);
+    border:2px dashed rgba(0,0,0,.2); margin:0 auto;
+  }
+  .place-zone.drag{border-color:var(--accent); border-style:solid; box-shadow:0 0 0 8px rgba(212,86,28,.14);}
+  .place-zone.loaded{border-color:var(--good); border-style:solid;}
+  .place-zone .ring{position:absolute; inset:9px; border-radius:50%; border:1px dashed rgba(0,0,0,.18);}
+  .place-zone .disc{
+    position:absolute; inset:24px; border-radius:50%;
+    background:radial-gradient(circle at 34% 28%,#fbfbfa 0%,#e4e3e0 42%,#c8c7c3 72%,#b3b2ae 100%);
+    box-shadow:inset 0 2px 6px rgba(255,255,255,.9), 0 8px 18px rgba(0,0,0,.16);
+    animation:drift 26s linear infinite;
+  }
+  .place-zone.spinning .disc{animation-duration:2.4s;}
+  @keyframes drift{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+  .place-zone .content{position:relative; display:flex; flex-direction:column; align-items:center; gap:6px; pointer-events:none;}
+  .place-zone .tri{width:0; height:0; border-left:17px solid var(--accent); border-top:11px solid transparent; border-bottom:11px solid transparent; margin-left:6px; filter:drop-shadow(0 2px 4px rgba(0,0,0,.2));}
+  .place-zone .label{font:600 9.5px "JetBrains Mono",monospace; letter-spacing:.05em; color:var(--muted); text-transform:uppercase; text-align:center; max-width:130px;}
+  .place-hint{margin-top:9px; font:400 10.5px "JetBrains Mono",monospace; color:var(--muted-2); text-align:center; max-width:220px;}
+
+  .key-row{padding:10px 16px 0; display:flex; justify-content:flex-end;}
+  #key-btn{display:flex; align-items:center; gap:8px; font:600 11.5px Archivo,sans-serif; letter-spacing:.05em; padding:7px 11px;}
+
+  .search-row{padding:12px 16px 0; display:flex; gap:10px; align-items:stretch;}
+  .search-box{
+    flex:1; min-width:0; background:var(--field); border:1px solid var(--border-soft);
+    border-radius:8px; padding:12px; display:flex; flex-direction:column; gap:8px; min-height:150px;
+  }
+  #search-text{
+    flex:1; border:0; outline:0; resize:none; background:transparent;
+    font:800 18px/1.28 Archivo,sans-serif; color:var(--text); width:100%;
+  }
+  #search-text::placeholder{color:var(--muted-3); font-weight:600;}
+  .search-tools{display:flex; align-items:center; justify-content:space-between; gap:8px;}
+  #find-btn{
+    width:88px; flex:none; padding:14px 11px; display:flex; flex-direction:column;
+    justify-content:space-between; align-items:flex-start; gap:16px;
+  }
+  #find-btn .t{font:800 14px/1.08 Archivo,sans-serif; color:#fff; text-align:left;}
+  #find-btn .arrow{font:400 20px/1 "JetBrains Mono",monospace; color:#fff; align-self:flex-end;}
+
+  .filters{padding:10px 16px 0; display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+  .filters label.muted{display:flex; align-items:center; gap:6px;}
+  .filters input[type=number]{width:60px;}
+
+  #results{margin-top:14px; border-top:1px solid var(--border); background:var(--panel); padding:10px 16px 14px; max-height:300px; overflow:auto;}
+  .results-head{display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:8px;}
+  .results-title{font:600 10px "JetBrains Mono",monospace; letter-spacing:.06em; color:var(--muted); text-transform:uppercase;}
+  .results-meta{font:400 10.5px "JetBrains Mono",monospace; color:var(--muted-2);}
+  .hit-row{
+    display:flex; align-items:center; gap:9px; width:100%; text-align:left;
+    background:var(--panel-3); border:1px solid var(--border-soft); border-radius:8px;
+    padding:8px 9px; margin-bottom:5px; font:inherit; cursor:pointer;
+  }
+  .hit-row:hover{background:#e3e2df;}
+  .hit-row .play{width:24px; height:24px; flex:none; border-radius:5px; background:var(--text-2); display:grid; place-items:center; padding:0; border:0;}
+  .hit-row .play .tri{width:0; height:0; border-left:7px solid #e9e8e5; border-top:4.5px solid transparent; border-bottom:4.5px solid transparent; margin-left:2px;}
+  .hit-row .info{flex:1; min-width:0;}
+  .hit-row .name{font:600 11.5px "JetBrains Mono",monospace; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .hit-row .meta{font:400 10px "JetBrains Mono",monospace; color:var(--muted-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .hit-row .bar{width:44px; height:5px; border-radius:3px; background:rgba(0,0,0,.12); flex:none; overflow:hidden;}
+  .hit-row .bar > span{display:block; height:100%; background:var(--accent);}
+  .hit-row .score{font:600 10.5px "JetBrains Mono",monospace; color:var(--accent-hover); width:32px; text-align:right; flex:none;}
+  #results .empty{padding:14px 4px; color:var(--muted-2); font-size:13px;}
+
+  .plan-drawer{border-top:1px solid var(--border);}
+  .plan-drawer-head{
+    display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;
+    padding:12px 16px; background:var(--panel);
+  }
+  .plan-drawer-head h2{font:600 11px "JetBrains Mono",monospace; letter-spacing:.06em; color:var(--muted); text-transform:uppercase;}
+  .plan-actions{display:flex; gap:6px; align-items:center; flex-wrap:wrap;}
+  #plan-body{display:none; padding:0 16px 16px;}
+  #plan-body.open{display:block;}
+  #plan-list{max-height:320px; overflow:auto; border:1px solid var(--border-soft); border-radius:8px; margin-top:6px;}
   .plan-row{
-    display:grid; grid-template-columns:1fr 1.3fr 1fr; gap:16px; align-items:center;
-    padding:12px 14px; border-bottom:1px solid var(--border); font-size:15px;
+    display:flex; flex-direction:column; gap:3px;
+    padding:9px 11px; border-bottom:1px solid var(--border-soft); font-size:11.5px;
   }
-  .plan-row.err{background:#2a1a10; border-left:4px solid var(--bad);}
+  .plan-row.head{display:none;}
+  .plan-row.err{background:var(--bad-bg);}
   .plan-row .old{color:var(--bad); text-decoration:line-through; word-break:break-all;}
-  .plan-row .reason{color:var(--muted); font-size:14px;}
+  .plan-row .reason{color:var(--muted-2); font-size:10.5px;}
   .plan-row .new{color:var(--good); word-break:break-all;}
-  .plan-head{font-weight:700; color:var(--muted); text-transform:uppercase; font-size:12.5px; letter-spacing:.06em; border-bottom:2px solid var(--border);}
 
-  /* SEARCH results */
-  #search-results .hit-row, #fit-results .hit-row{
-    display:flex; align-items:center; gap:12px; padding:10px 8px;
-    border-bottom:1px solid var(--border); font-size:14.5px; flex-wrap:wrap;
-  }
-  .hit-name{font-weight:600; min-width:140px; word-break:break-all;}
-  .hit-meta{color:var(--muted); min-width:150px;}
-  .play-btn{
-    width:34px; height:34px; border-radius:50%; display:flex; align-items:center;
-    justify-content:center; padding:0; flex:0 0 auto;
-  }
-  .score-bar{width:60px; height:8px; background:var(--panel-2); border-radius:4px; overflow:hidden; flex:0 0 auto;}
-  .score-bar > span{display:block; height:100%; background:var(--accent-2);}
-
-  /* FIT drop zone */
-  #drop-zone{
-    border:3px dashed var(--border); border-radius:10px; padding:30px;
-    text-align:center; font-size:18px; color:var(--muted); cursor:pointer;
-    transition:.15s;
-  }
-  #drop-zone.drag{border-color:var(--accent-2); color:var(--accent-2); background:#0f1a1a;}
-
-  /* now-playing bar */
   #player-bar{
-    position:fixed; left:0; right:0; bottom:0; background:var(--panel-2);
-    border-top:2px solid var(--border); padding:10px 16px; display:flex;
-    align-items:center; gap:14px; font-size:14.5px; z-index:50;
+    position:fixed; left:0; right:0; bottom:0; display:flex; justify-content:center; z-index:50; pointer-events:none;
+  }
+  #player-bar .inner{
+    pointer-events:auto; width:100%; max-width:432px; margin:0 12px 12px;
+    background:var(--panel-2); border:1px solid var(--border); border-radius:10px;
+    padding:9px 14px; display:flex; align-items:center; gap:12px; font-size:12px;
+    box-shadow:0 8px 20px rgba(0,0,0,.25);
   }
   #player-bar .muted{flex:0 0 auto;}
-  #player-bar audio{flex:1 1 auto; max-width:520px;}
+  #player-bar audio{flex:1 1 auto; height:32px;}
+
+  @media (max-width:420px){
+    .toprow{flex-direction:column; align-items:center;}
+    .rail{flex-direction:row; width:auto; padding-top:0;}
+  }
 </style>
 </head>
 <body>
 
-<div id="banner"></div>
-<div id="errors"></div>
+<div id="banner" role="status"></div>
+<div id="errors" aria-live="polite"></div>
 
-<main class="grid">
+<div class="wrap">
+<div class="card">
 
-  <!-- 1. SCAN -->
-  <section class="panel panel-scan">
-    <h1>crate</h1>
-    <h2>1 · Scan</h2>
-    <div class="row">
-      <input type="text" id="scan-root" placeholder="/path/to/messy/folder" style="flex:1;" value="messy">
-      <button class="primary" id="scan-btn">Scan</button>
-    </div>
-    <div class="row">
-      <progress id="scan-progress" value="0" max="1"></progress>
-    </div>
-    <div class="row">
-      <span class="muted" id="scan-count">0 / 0</span>
-    </div>
-  </section>
+  <div class="titlebar">
+    <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    <div class="name">Crate / Librarian</div>
+  </div>
 
-  <!-- 3. SEARCH -->
-  <section class="panel panel-search">
-    <h2>3 · Search</h2>
-    <div class="row">
-      <input type="text" id="search-text" placeholder="search filename, family, descriptors…" style="flex:1;">
-      <button id="search-btn">Search</button>
+  <div class="topbar">
+    <div class="brand">
+      <div class="mark"><span></span></div>
+      <div class="word">CRATE</div>
     </div>
-    <div class="row" id="family-chips"></div>
-    <div class="row" id="type-chips"></div>
-    <div class="row">
-      <label class="muted">BPM <input type="number" id="bpm-min" placeholder="min" style="width:70px;"></label>
-      <label class="muted">to <input type="number" id="bpm-max" placeholder="max" style="width:70px;"></label>
-      <button id="search-clear">Clear filters</button>
-    </div>
-    <div id="search-results" style="margin-top:10px; max-height:260px; overflow:auto;"></div>
-  </section>
+    <button id="library-btn" title="Click to change the folder Rescan/Place use">
+      <span class="status-dot"></span>
+      <span class="path" id="library-path-label">messy</span>
+      <span class="muted" aria-hidden="true">▾</span>
+    </button>
+  </div>
 
-  <!-- 2. PLAN (centerpiece) -->
-  <section class="panel panel-plan">
-    <div class="row" style="justify-content:space-between;">
-      <h2 style="margin:0;">2 · Plan — the rename diff</h2>
-      <div class="row">
-        <button id="plan-btn" class="primary">Build Plan</button>
-        <button id="apply-btn" disabled>Apply</button>
-        <button id="undo-btn" class="danger" style="display:none;">UNDO</button>
-        <span class="muted" id="plan-status"></span>
+  <div class="toprow">
+    <div class="rail">
+      <button id="fit-track-btn" title="Upload a bounce of your track and rank samples against it">
+        <span class="dot-icon" aria-hidden="true"></span>
+        <span class="label">FIT<br>TRACK</span>
+      </button>
+      <button id="scan-btn" class="primary" title="Scan the library folder and rebuild the search index">
+        <span class="icon" aria-hidden="true"></span>
+        <span class="label">RESCAN<br>FOLDERS</span>
+      </button>
+      <div class="status" id="rail-status">idle</div>
+    </div>
+
+    <div class="place-col">
+      <button id="place-zone" class="place-zone" aria-label="Drop a sample here, or click to choose a file, to label it and file it into the right folder">
+        <div class="ring"></div>
+        <div class="disc"></div>
+        <div class="content">
+          <div class="tri" aria-hidden="true"></div>
+          <div class="label" id="place-zone-label">drop a sample<br>to file it away</div>
+        </div>
+      </button>
+      <div class="place-hint" id="place-hint">or click to choose a file</div>
+    </div>
+    <input type="file" id="place-file-input" hidden accept="audio/*">
+    <input type="file" id="fit-file-input" hidden accept="audio/*">
+  </div>
+
+  <div class="key-row">
+    <button id="key-btn" title="Cycle the key filter">
+      <span id="key-label">ANY KEY</span><span class="muted" aria-hidden="true">▾</span>
+    </button>
+  </div>
+
+  <div class="search-row">
+    <div class="search-box">
+      <label class="field-label" for="search-text">What sample are you after?</label>
+      <textarea id="search-text" placeholder="dark punchy kick, vinyl dust, 90 bpm" maxlength="140"></textarea>
+      <div class="search-tools">
+        <button id="search-clear" class="ghost">✕ clear</button>
+        <span class="muted" id="chars-left">140 left</span>
       </div>
     </div>
-    <div id="plan-list" class="mono">
-      <div class="plan-row plan-head"><div>Old name</div><div>Reason</div><div>New path</div></div>
-    </div>
-  </section>
+    <button id="find-btn" class="primary">
+      <span class="t">FIND<br>SAMPLES</span>
+      <span class="arrow" aria-hidden="true">↳</span>
+    </button>
+  </div>
 
-  <!-- 4. FIT -->
-  <section class="panel panel-fit">
-    <div class="row" style="justify-content:space-between;">
-      <h2 style="margin:0;">4 · Fit — match a bounce</h2>
-      <label class="chip" id="contrast-toggle">Contrast: OFF</label>
-    </div>
-    <div id="drop-zone">drop a bounce of your track<br><span class="muted" style="font-size:14px;">(or click to choose a file)</span></div>
-    <input type="file" id="fit-file-input" hidden>
-    <div id="fit-results" style="margin-top:12px; max-height:260px; overflow:auto;"></div>
-  </section>
+  <div class="filters">
+    <div class="row" id="family-chips"></div>
+    <div class="row" id="type-chips"></div>
+    <label class="muted">BPM <input type="number" id="bpm-min" placeholder="min"></label>
+    <label class="muted">to <input type="number" id="bpm-max" placeholder="max"></label>
+  </div>
 
-</main>
+  <div id="results">
+    <div class="results-head">
+      <div class="results-title" id="results-title">closest matches</div>
+      <div class="row" id="contrast-row" style="display:none;">
+        <button id="contrast-toggle" class="chip" aria-pressed="false">Contrast: OFF</button>
+      </div>
+      <div class="results-meta" id="results-meta"></div>
+    </div>
+    <div id="results-list"></div>
+  </div>
+
+  <div class="plan-drawer">
+    <div class="plan-drawer-head">
+      <h2>Reorganise plan</h2>
+      <div class="plan-actions">
+        <span class="muted" id="plan-status">no plan yet — rescan first</span>
+      </div>
+    </div>
+    <div class="plan-drawer-head" style="padding-top:0;">
+      <button id="plan-toggle-btn" class="ghost" aria-expanded="false" aria-controls="plan-body">View diff</button>
+      <div class="plan-actions">
+        <button id="apply-btn" disabled>Apply</button>
+        <button id="undo-btn" class="danger" style="display:none;">Undo</button>
+      </div>
+    </div>
+    <div id="plan-body">
+      <div id="plan-list" class="mono"></div>
+    </div>
+  </div>
+
+</div>
+</div>
 
 <div id="player-bar">
-  <span class="muted">Now playing: <span id="now-playing">—</span></span>
-  <audio id="player" controls></audio>
+  <div class="inner">
+    <span class="muted">Playing: <span id="now-playing">—</span></span>
+    <audio id="player" controls></audio>
+  </div>
 </div>
 
 <script>
@@ -198,6 +327,7 @@
   "use strict";
 
   const FAMILIES = ["Drums","Bass","Acoustic","Synth","Vocal","FX","unsorted"];
+  const KEYS = [null, "C", "Am", "F", "Dm", "G", "Em"];
   const player = document.getElementById("player");
   const nowPlaying = document.getElementById("now-playing");
 
@@ -279,64 +409,118 @@
   }
 
   // ---------------------------------------------------------------------
-  // 1. SCAN
+  // library path — drives Scan's root AND where Place files new drops
+  // ---------------------------------------------------------------------
+  let scanRoot = "messy";
+  const libraryLabel = document.getElementById("library-path-label");
+
+  function shortenPath(p){
+    const parts = p.split(/[\\/]/).filter(Boolean);
+    return parts.slice(-2).join("/") || p;
+  }
+  function renderLibraryLabel(){
+    libraryLabel.textContent = shortenPath(scanRoot);
+    document.getElementById("library-btn").title = scanRoot + " — click to change the folder Rescan/Place use";
+  }
+  document.getElementById("library-btn").addEventListener("click", () => {
+    const next = window.prompt("Library folder (used by Rescan and by dropping a sample):", scanRoot);
+    if (next && next.trim()){
+      scanRoot = next.trim();
+      renderLibraryLabel();
+      setRailStatus("needs-rescan", "folder changed — rescan");
+    }
+  });
+  renderLibraryLabel();
+
+  // ---------------------------------------------------------------------
+  // rail status (shared by scan + plan)
+  // ---------------------------------------------------------------------
+  const railStatusEl = document.getElementById("rail-status");
+  function setRailStatus(kind, text){
+    railStatusEl.textContent = text;
+    railStatusEl.className = "status" + (kind === "needs-rescan" ? " needs" : "");
+  }
+  railStatusEl.addEventListener("click", () => {
+    if (railStatusEl.classList.contains("needs")) startScan();
+  });
+
+  // ---------------------------------------------------------------------
+  // SCAN + auto PLAN
   // ---------------------------------------------------------------------
   let scanPoll = null;
+  let lastPlans = [];
 
   async function startScan(){
     clearInterval(scanPoll);
-    const root = document.getElementById("scan-root").value.trim();
-    document.getElementById("scan-progress").value = 0;
-    document.getElementById("scan-count").textContent = "0 / 0";
+    setRailStatus("scanning", "scan 0%");
     let data;
-    try { data = await api("POST", "/api/scan", { root }); } catch(e){ return; }
+    try { data = await api("POST", "/api/scan", { root: scanRoot }); }
+    catch(e){ setRailStatus("idle", "idle"); return; }
     const jobId = data.job_id;
     scanPoll = setInterval(async () => {
       let s;
-      try { s = await api("GET", "/api/scan/" + jobId); } catch(e){ clearInterval(scanPoll); return; }
+      try { s = await api("GET", "/api/scan/" + jobId); }
+      catch(e){ clearInterval(scanPoll); setRailStatus("idle", "idle"); return; }
       const total = s.total || 0;
       const done = (s.records || []).length;
-      document.getElementById("scan-progress").max = Math.max(total, 1);
-      document.getElementById("scan-progress").value = done;
-      document.getElementById("scan-count").textContent = done + " / " + total;
-      if (s.done){
+      const pct = total ? Math.round((done / total) * 100) : (s.done ? 100 : 0);
+      if (!s.done){
+        setRailStatus("scanning", "scan " + pct + "%");
+      } else {
         clearInterval(scanPoll);
-        document.getElementById("scan-count").textContent += "  — scan complete";
         loadStatus();
+        await buildPlan();
+        runSearch();
       }
     }, 250);
   }
-
   document.getElementById("scan-btn").addEventListener("click", startScan);
 
   // ---------------------------------------------------------------------
-  // 2. PLAN (centerpiece)
+  // PLAN / APPLY / UNDO — kept fully visible; applying moves real files
   // ---------------------------------------------------------------------
   let lastUndoLog = null;
+  const planBody = document.getElementById("plan-body");
+  const planToggleBtn = document.getElementById("plan-toggle-btn");
 
   function renderPlan(plans){
     const list = document.getElementById("plan-list");
-    list.innerHTML = '<div class="plan-row plan-head"><div>Old name</div><div>Reason</div><div>New path</div></div>';
+    list.innerHTML = "";
+    if (!plans.length){
+      list.innerHTML = '<div class="plan-row"><span class="muted">nothing to move</span></div>';
+    }
     plans.forEach(p => {
       const row = document.createElement("div");
       row.className = "plan-row" + (/quarantined/i.test(p.reason || "") ? " err" : "");
       row.innerHTML =
         `<div class="old">${esc(p.old_path)}</div>` +
         `<div class="reason">${esc(p.reason)}</div>` +
-        `<div class="new">${esc(p.new_path)}</div>`;
+        `<div class="new">→ ${esc(p.new_path)}</div>`;
       list.appendChild(row);
     });
     document.getElementById("apply-btn").disabled = plans.length === 0;
   }
 
   async function buildPlan(){
-    document.getElementById("plan-status").textContent = "building…";
+    document.getElementById("plan-status").textContent = "building plan…";
     let data;
     try { data = await api("POST", "/api/plan", {}); }
-    catch(e){ document.getElementById("plan-status").textContent = "failed"; return; }
-    renderPlan(data.plans || []);
-    document.getElementById("plan-status").textContent = data.plans.length + " changes proposed";
+    catch(e){
+      document.getElementById("plan-status").textContent = "plan failed";
+      setRailStatus("idle", "idle");
+      return;
+    }
+    lastPlans = data.plans || [];
+    renderPlan(lastPlans);
+    document.getElementById("plan-status").textContent = lastPlans.length + " moves proposed · dry run";
+    setRailStatus("idle", lastPlans.length ? "plan ready" : "idle");
   }
+
+  planToggleBtn.addEventListener("click", () => {
+    const open = planBody.classList.toggle("open");
+    planToggleBtn.textContent = open ? "Hide diff" : "View diff";
+    planToggleBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  });
 
   async function applyPlan(){
     document.getElementById("plan-status").textContent = "applying…";
@@ -359,136 +543,240 @@
     document.getElementById("apply-btn").disabled = false;
   }
 
-  document.getElementById("plan-btn").addEventListener("click", buildPlan);
-  document.getElementById("apply-btn").addEventListener("click", applyPlan);
+  document.getElementById("apply-btn").addEventListener("click", () => {
+    if (window.confirm("Move " + lastPlans.length + " files on disk now? This is not a dry run.")) applyPlan();
+  });
   document.getElementById("undo-btn").addEventListener("click", undoPlan);
 
   // ---------------------------------------------------------------------
-  // 3. SEARCH
+  // SEARCH
   // ---------------------------------------------------------------------
   let activeFamily = null;
   let activeType = null; // "oneshot" | "loop" | null
+  let activeKeyIdx = 0;
 
   function buildChips(){
     const fam = document.getElementById("family-chips");
-    fam.innerHTML = FAMILIES.map(f => `<span class="chip" data-family="${esc(f)}">${esc(f)}</span>`).join("");
+    fam.innerHTML = FAMILIES.map(f => `<button type="button" class="chip" data-family="${esc(f)}" aria-pressed="false">${esc(f)}</button>`).join("");
     fam.querySelectorAll(".chip").forEach(chip => chip.addEventListener("click", () => {
       const f = chip.dataset.family;
       activeFamily = (activeFamily === f) ? null : f;
-      fam.querySelectorAll(".chip").forEach(c => c.classList.toggle("active", c.dataset.family === activeFamily));
+      fam.querySelectorAll(".chip").forEach(c => {
+        const on = c.dataset.family === activeFamily;
+        c.classList.toggle("active", on);
+        c.setAttribute("aria-pressed", on ? "true" : "false");
+      });
       runSearch();
     }));
 
     const type = document.getElementById("type-chips");
-    type.innerHTML = ["oneshot", "loop"].map(t => `<span class="chip" data-type="${t}">${t}</span>`).join("");
+    type.innerHTML = ["oneshot", "loop"].map(t => `<button type="button" class="chip" data-type="${t}" aria-pressed="false">${t}</button>`).join("");
     type.querySelectorAll(".chip").forEach(chip => chip.addEventListener("click", () => {
       const t = chip.dataset.type;
       activeType = (activeType === t) ? null : t;
-      type.querySelectorAll(".chip").forEach(c => c.classList.toggle("active", c.dataset.type === activeType));
+      type.querySelectorAll(".chip").forEach(c => {
+        const on = c.dataset.type === activeType;
+        c.classList.toggle("active", on);
+        c.setAttribute("aria-pressed", on ? "true" : "false");
+      });
       runSearch();
     }));
   }
 
-  function renderHits(container, hits){
+  const keyBtn = document.getElementById("key-btn");
+  const keyLabelEl = document.getElementById("key-label");
+  function renderKey(){
+    const k = KEYS[activeKeyIdx];
+    keyLabelEl.textContent = k ? k.toUpperCase() : "ANY KEY";
+  }
+  keyBtn.addEventListener("click", () => {
+    activeKeyIdx = (activeKeyIdx + 1) % KEYS.length;
+    renderKey();
+    runSearch();
+  });
+  renderKey();
+
+  function renderHits(container, hits, titleText){
+    document.getElementById("results-title").textContent = titleText;
+    document.getElementById("results-meta").textContent = hits.length + " results";
     container.innerHTML = "";
     if (!hits.length){
-      container.innerHTML = '<div class="muted" style="padding:10px;">no results</div>';
+      container.innerHTML = '<div class="empty">no results</div>';
       return;
     }
     hits.forEach(h => {
       const r = h.record || {};
-      const row = document.createElement("div");
+      const row = document.createElement("button");
+      row.type = "button";
       row.className = "hit-row";
       row.innerHTML =
-        `<button class="play-btn" title="play">&#9658;</button>` +
-        `<span class="hit-name">${esc(r.filename)}</span>` +
-        `<span class="hit-meta">${esc(r.family)} / ${esc(r.instrument)}</span>` +
-        `<span class="hit-meta">${r.bpm ? esc(r.bpm) + " BPM" : "—"} · ${esc(r.key || "—")}</span>` +
-        `<span class="score-bar"><span style="width:${Math.round((h.score||0)*100)}%"></span></span>` +
-        `<span>${reasonChips(h.reasons)}</span>` +
-        (r.error ? `<span class="chip reason" style="color:var(--bad);border-color:var(--bad);">${esc(r.error)}</span>` : "");
-      row.querySelector(".play-btn").addEventListener("click", () => playAudio(r.path, r.filename));
+        `<span class="play" aria-hidden="true"><span class="tri"></span></span>` +
+        `<span class="info">` +
+          `<span class="name">${esc(r.filename)}</span><br>` +
+          `<span class="meta">${esc(r.family)} / ${esc(r.instrument)} · ${r.bpm ? esc(r.bpm) + " BPM" : "—"} · ${esc(r.key || "—")}</span>` +
+        `</span>` +
+        `<span class="bar"><span style="width:${Math.round((h.score||0)*100)}%"></span></span>` +
+        `<span class="score">${Math.round((h.score||0)*100)}%</span>`;
+      row.title = "play " + (r.filename || "");
+      row.addEventListener("click", () => playAudio(r.path, r.filename));
       container.appendChild(row);
+      if (h.reasons && h.reasons.length){
+        const reasons = document.createElement("div");
+        reasons.style.margin = "-3px 0 6px 42px";
+        reasons.innerHTML = reasonChips(h.reasons);
+        container.appendChild(reasons);
+      }
     });
   }
 
   async function runSearch(){
+    if (fitFile) return; // Fit Track owns the results panel while a reference is loaded
     const body = {
       text: document.getElementById("search-text").value.trim() || null,
       family: activeFamily,
       sample_type: activeType,
+      key: KEYS[activeKeyIdx],
       bpm_min: numOrNull(document.getElementById("bpm-min").value),
       bpm_max: numOrNull(document.getElementById("bpm-max").value),
       limit: 50,
     };
     let data;
     try { data = await api("POST", "/api/search", body); } catch(e){ return; }
-    renderHits(document.getElementById("search-results"), data.hits || []);
+    renderHits(document.getElementById("results-list"), data.hits || [], "closest matches");
     loadStatus();
   }
 
   function numOrNull(v){ return (v === "" || v === null || v === undefined) ? null : Number(v); }
 
-  document.getElementById("search-btn").addEventListener("click", runSearch);
-  document.getElementById("search-text").addEventListener("keydown", e => { if (e.key === "Enter") runSearch(); });
+  document.getElementById("find-btn").addEventListener("click", runSearch);
+  document.getElementById("search-text").addEventListener("input", () => {
+    document.getElementById("chars-left").textContent = (140 - document.getElementById("search-text").value.length) + " left";
+  });
+  document.getElementById("search-text").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey){ e.preventDefault(); runSearch(); } });
   document.getElementById("bpm-min").addEventListener("change", runSearch);
   document.getElementById("bpm-max").addEventListener("change", runSearch);
   document.getElementById("search-clear").addEventListener("click", () => {
-    activeFamily = null; activeType = null;
+    activeFamily = null; activeType = null; activeKeyIdx = 0;
     document.getElementById("search-text").value = "";
+    document.getElementById("chars-left").textContent = "140 left";
     document.getElementById("bpm-min").value = "";
     document.getElementById("bpm-max").value = "";
-    document.querySelectorAll("#family-chips .chip, #type-chips .chip").forEach(c => c.classList.remove("active"));
+    document.querySelectorAll("#family-chips .chip, #type-chips .chip").forEach(c => { c.classList.remove("active"); c.setAttribute("aria-pressed","false"); });
+    renderKey();
+    clearFit();
     runSearch();
   });
 
   // ---------------------------------------------------------------------
-  // 4. FIT
+  // FIT TRACK (rail button) — upload a bounce, rank the library against it
   // ---------------------------------------------------------------------
-  let lastFitFile = null;
+  let fitFile = null;
   let contrastOn = false;
 
-  const dropZone = document.getElementById("drop-zone");
+  const fitTrackBtn = document.getElementById("fit-track-btn");
   const fitInput = document.getElementById("fit-file-input");
+  const contrastRow = document.getElementById("contrast-row");
 
-  ["dragenter", "dragover"].forEach(ev => dropZone.addEventListener(ev, e => {
-    e.preventDefault(); dropZone.classList.add("drag");
-  }));
-  ["dragleave", "drop"].forEach(ev => dropZone.addEventListener(ev, e => {
-    e.preventDefault(); dropZone.classList.remove("drag");
-  }));
-  dropZone.addEventListener("drop", e => {
-    const f = e.dataTransfer.files && e.dataTransfer.files[0];
-    if (f){ lastFitFile = f; doFit(); }
+  function renderFitTrackBtn(){
+    fitTrackBtn.classList.toggle("active", !!fitFile);
+    fitTrackBtn.title = fitFile
+      ? "fitting to " + fitFile.name + " — click to clear"
+      : "Upload a bounce of your track and rank samples against it";
+  }
+
+  fitTrackBtn.addEventListener("click", () => {
+    if (fitFile){ clearFit(); return; }
+    fitInput.click();
   });
-  dropZone.addEventListener("click", () => fitInput.click());
   fitInput.addEventListener("change", () => {
-    if (fitInput.files[0]){ lastFitFile = fitInput.files[0]; doFit(); }
+    if (fitInput.files[0]){ fitFile = fitInput.files[0]; renderFitTrackBtn(); doFit(); }
+    fitInput.value = "";
   });
+
+  function clearFit(){
+    fitFile = null;
+    renderFitTrackBtn();
+    contrastRow.style.display = "none";
+    runSearch();
+  }
 
   document.getElementById("contrast-toggle").addEventListener("click", (e) => {
     contrastOn = !contrastOn;
     e.currentTarget.textContent = "Contrast: " + (contrastOn ? "ON" : "OFF");
     e.currentTarget.classList.toggle("active", contrastOn);
-    if (lastFitFile) doFit();
+    e.currentTarget.setAttribute("aria-pressed", contrastOn ? "true" : "false");
+    if (fitFile) doFit();
   });
 
   async function doFit(){
-    if (!lastFitFile) return;
-    const container = document.getElementById("fit-results");
-    container.innerHTML = '<div class="muted" style="padding:10px;">analysing…</div>';
+    if (!fitFile) return;
+    contrastRow.style.display = "flex";
+    document.getElementById("results-title").textContent = "ranked against your track";
+    document.getElementById("results-list").innerHTML = '<div class="empty">analysing…</div>';
     const form = new FormData();
-    form.append("file", lastFitFile, lastFitFile.name);
+    form.append("file", fitFile, fitFile.name);
     form.append("contrast", contrastOn ? "true" : "false");
     let data;
     try { data = await api("POST", "/api/fit?contrast=" + contrastOn, form); }
-    catch(e){ container.innerHTML = ""; return; }
-    renderHits(container, data.hits || []);
+    catch(e){ return; }
+    renderHits(document.getElementById("results-list"), data.hits || [], "ranked against your track");
+  }
+
+  // ---------------------------------------------------------------------
+  // PLACE — the central circle: drop ONE sample, get it labelled and
+  // filed straight into {family}/{instrument}/... under the library root
+  // ---------------------------------------------------------------------
+  const placeZone = document.getElementById("place-zone");
+  const placeInput = document.getElementById("place-file-input");
+  const placeLabel = document.getElementById("place-zone-label");
+  const placeHint = document.getElementById("place-hint");
+
+  function renderPlaceIdle(){
+    placeZone.classList.remove("loaded");
+    placeLabel.innerHTML = "drop a sample<br>to file it away";
+    placeHint.textContent = "or click to choose a file";
+  }
+
+  ["dragenter", "dragover"].forEach(ev => placeZone.addEventListener(ev, e => {
+    e.preventDefault(); placeZone.classList.add("drag");
+  }));
+  ["dragleave", "drop"].forEach(ev => placeZone.addEventListener(ev, e => {
+    e.preventDefault(); placeZone.classList.remove("drag");
+  }));
+  placeZone.addEventListener("drop", e => {
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) doPlace(f);
+  });
+  placeZone.addEventListener("click", () => placeInput.click());
+  placeInput.addEventListener("change", () => {
+    if (placeInput.files[0]) doPlace(placeInput.files[0]);
+    placeInput.value = "";
+  });
+
+  async function doPlace(file){
+    placeZone.classList.add("spinning");
+    placeZone.classList.remove("loaded");
+    placeLabel.innerHTML = "listening…";
+    placeHint.textContent = file.name;
+    const form = new FormData();
+    form.append("file", file, file.name);
+    form.append("root", scanRoot);
+    let data;
+    try { data = await api("POST", "/api/place", form); }
+    catch(e){ placeZone.classList.remove("spinning"); renderPlaceIdle(); return; }
+    placeZone.classList.remove("spinning");
+    placeZone.classList.add("loaded");
+    placeLabel.innerHTML = esc(data.family) + "<br>" + esc(data.instrument);
+    placeHint.textContent = "→ " + data.new_path_relative;
+    setTimeout(renderPlaceIdle, 4500);
+    runSearch(); // it's indexed now -- show it if it matches the current query
   }
 
   // ---------------------------------------------------------------------
   buildChips();
   loadStatus();
+  renderFitTrackBtn();
+  renderPlaceIdle();
   runSearch();
 })();
 </script>

@@ -28,7 +28,7 @@ import time
 import uuid
 import wave
 import zlib
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict, is_dataclass, replace
 from email.parser import BytesParser
 from email.policy import compat32
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -37,7 +37,7 @@ from urllib.parse import urlparse, parse_qs
 # --------------------------------------------------------------------------
 # THE FLAG.
 # --------------------------------------------------------------------------
-USE_FIXTURES = False
+USE_FIXTURES = True
 
 # --------------------------------------------------------------------------
 # Defensive imports of the other three modules. Any of these may not exist
@@ -536,6 +536,112 @@ def _fixture_fit_hits(contrast: bool, limit: int) -> list[dict]:
 
 
 # --------------------------------------------------------------------------
+# /api/place (multipart upload) — drop ONE sample, get it analysed and
+# filed straight into {family}/{instrument}/... under the library root.
+# --------------------------------------------------------------------------
+def _confident_label(filename: str) -> tuple[str, str] | None:
+    """Same keyword table analyzer.py's own fallback classifier uses, but
+    without its confidence<0.5 bug: matches are accepted outright, and only
+    when every hit agrees on exactly one (family, instrument) pair."""
+    if analyzer is None:
+        return None
+    lower = filename.lower()
+    tokens = set(re.split(r"[^a-z0-9]+", lower)) - {""}
+    whole_token_only = {"hh", "hat", "sub", "pad", "arp", "tom", "bass", "lead", "vox"}
+    hits = set()
+    for needle, family, instrument in getattr(analyzer, "_FILENAME_KEYWORDS", []):
+        matched = (needle in tokens) if needle in whole_token_only else (needle in lower)
+        if matched:
+            hits.add((family, instrument))
+    if len(hits) == 1:
+        return next(iter(hits))
+    return None
+
+
+def place_available() -> bool:
+    return analyzer is not None and organiser is not None
+
+
+def handle_place_sample(original_filename: str, file_bytes: bytes, library_root: str) -> dict:
+    if not place_available():
+        return {"error": f"placing samples needs analyzer.py and organiser.py (missing={modules_missing()})"}
+    if not file_bytes:
+        return {"error": "no file received"}
+    if not library_root or not library_root.strip():
+        return {"error": "no library folder set — pick one first"}
+    library_root_abs = os.path.abspath(library_root.strip())
+    if not os.path.isdir(library_root_abs):
+        return {"error": f"library folder does not exist: {library_root_abs}"}
+
+    safe_name = os.path.basename(original_filename or "") or "sample.wav"
+    # Land the drop *inside* the library root itself (not api.py's own
+    # .cache/uploads) so its only common ancestor with the destination is the
+    # library root — otherwise organiser.apply()'s auto-detected root walks
+    # up to wherever these two folders actually converge (could be far
+    # outside the library) and writes its undo log there instead.
+    incoming_dir = os.path.join(library_root_abs, "_incoming", uuid.uuid4().hex[:8])
+    os.makedirs(incoming_dir, exist_ok=True)
+    temp_path = os.path.join(incoming_dir, safe_name)
+    with open(temp_path, "wb") as f:
+        f.write(file_bytes)
+
+    rec = analyzer.analyze(temp_path)
+
+    if rec.error:
+        # organiser never deletes anything -- leave the drop under _incoming/
+        # rather than silently discarding it; the next full Rescan will pick
+        # it up too, so nothing is ever truly stuck.
+        return {"error": f"could not read {safe_name}: {rec.error} (left at {temp_path})"}
+
+    label = _confident_label(safe_name)
+    if label:
+        family, instrument = label
+        rec = replace(rec, family=family, instrument=instrument, confidence=max(rec.confidence, 0.92))
+
+    plans = organiser.plan([rec], DEFAULT_TEMPLATE)
+    p = plans[0]
+    # organiser.plan() rooted the move at our temp file's own folder
+    # (library_root/_incoming/<uuid>) since it only ever saw one record --
+    # keep its {family}/{instrument}/... naming but rebase it onto the
+    # library root itself, one level up.
+    auto_root = os.path.dirname(rec.path)
+    rel = os.path.relpath(p.new_path, auto_root)
+    real_new_path = os.path.normpath(os.path.join(library_root_abs, rel))
+    final_plan = RenamePlan(old_path=rec.path, new_path=real_new_path, reason=p.reason)
+
+    try:
+        log_path = organiser.apply([final_plan], dry_run=False)
+    except Exception as exc:
+        return {"error": f"{exc} (left at {temp_path})"}
+
+    try:
+        os.rmdir(incoming_dir)  # only succeeds once empty, i.e. after the move above
+    except OSError:
+        pass
+
+    rec = replace(rec, path=final_plan.new_path)
+    if index is not None:
+        try:
+            index.upsert([rec])  # searchable immediately, no full rescan needed
+        except Exception:
+            pass
+
+    return {
+        "family": rec.family,
+        "instrument": rec.instrument,
+        "confidence": rec.confidence,
+        "sample_type": rec.sample_type,
+        "bpm": rec.bpm,
+        "key": rec.key,
+        "duration_s": rec.duration_s,
+        "reason": final_plan.reason,
+        "new_path": final_plan.new_path,
+        "new_path_relative": os.path.relpath(final_plan.new_path, library_root_abs).replace(os.sep, "/"),
+        "undo_log": log_path,
+    }
+
+
+# --------------------------------------------------------------------------
 # /api/audio
 # --------------------------------------------------------------------------
 def demo_tone_bytes(path: str) -> bytes:
@@ -700,6 +806,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"hits": run_search(body)})
             if path == "/api/fit":
                 return self._json({"hits": self._handle_fit(qs)})
+            if path == "/api/place":
+                return self._json(self._handle_place(qs))
             return self._json({"error": "not found"}, 404)
         except Exception as e:
             return self._json({"error": str(e)}, 500)
@@ -723,6 +831,22 @@ class Handler(BaseHTTPRequestHandler):
                 with open(temp_path, "wb") as f:
                     f.write(file_field["data"])
         return run_fit(temp_path or "", contrast)
+
+    def _handle_place(self, qs: dict) -> dict:
+        content_type = self.headers.get("Content-Type", "")
+        body = self._read_body()
+        library_root = (qs.get("root") or [""])[0]
+        file_field = None
+        if content_type.startswith("multipart/form-data"):
+            fields = parse_multipart(content_type, body)
+            file_field = fields.get("file") or next(
+                (v for v in fields.values() if v.get("filename")), None
+            )
+            if fields.get("root") and isinstance(fields["root"].get("data"), str) and fields["root"]["data"].strip():
+                library_root = fields["root"]["data"]
+        if not file_field or not file_field.get("data"):
+            return {"error": "no file received"}
+        return handle_place_sample(file_field.get("filename") or "sample.wav", file_field["data"], library_root)
 
 
 def run_server(port: int = 8000) -> None:
