@@ -28,21 +28,34 @@ except Exception:
 
 _records: dict[str, SampleRecord] = {}
 
-# storage: upsert / all_records / save / load
+# The persisted store is scratch state, not project data: it lives in
+# .cache/ (gitignored) so a stale index can never be committed and survive
+# into a later run the way it did when this sat inside fixtures/.
+STORE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".cache", "index.json")
+
+# storage: upsert / clear / all_records / save / load
 
 def upsert(records: list[SampleRecord]) -> None:
     """Insert or replace records by path (the primary key)."""
     for r in records:
         _records[r.path] = r
 
+def clear() -> None:
+    """Drop every record. Callers that (re)ingest a folder call this first so
+    the index reflects exactly that folder and no earlier run's paths."""
+    _records.clear()
+
 def all_records() -> list[SampleRecord]:
     return list(_records.values())
 
-def save(path: str) -> None:
+def save(path: str = STORE_PATH) -> None:
+    parent = os.path.dirname(os.path.abspath(path))
+    if parent:
+        os.makedirs(parent, exist_ok=True)
     with open(path, "w") as f:
         json.dump([asdict(r) for r in _records.values()], f, indent=2)
 
-def load(path: str) -> None:
+def load(path: str = STORE_PATH) -> None:
     with open(path) as f:
         rows = json.load(f)
     upsert([SampleRecord(**row) for row in rows])

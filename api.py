@@ -233,6 +233,7 @@ def _run_scan_job(job_id: str, root: str) -> None:
             LAST_SCAN_RECORDS = records
             if index is not None:
                 try:
+                    index.clear()  # the index must hold exactly this folder
                     index.upsert(records)
                 except Exception:
                     pass  # search still works against whatever was already indexed
@@ -255,6 +256,30 @@ def _run_scan_job(job_id: str, root: str) -> None:
         with JOBS_LOCK:
             JOBS[job_id]["error"] = str(e)
             JOBS[job_id]["done"] = True
+
+
+def run_ingest(root: str) -> dict:
+    """Synchronous scan + analyse + index of `root`, for callers that want a
+    record count back instead of a progress job. Clears the index first, so
+    ingesting the same folder twice reports the same count both times."""
+    global LAST_SCAN_RECORDS
+    records: list[SampleRecord] = []
+    if scan_available():
+        for p in organiser.scan(root):
+            try:
+                rec = analyzer.analyze(p) if analyzer is not None else to_record(_fixture_like_record(p))
+            except Exception as e:
+                rec = _error_record(p, str(e))
+            records.append(rec)
+    else:
+        records = [to_record(r) for r in FIXTURE_RECORDS]
+    LAST_SCAN_RECORDS = records
+    indexed = 0
+    if index is not None:
+        index.clear()
+        index.upsert(records)
+        indexed = len(index.all_records())
+    return {"root": root, "count": len(records), "indexed": indexed}
 
 
 def _fixture_like_record(path: str) -> dict:
@@ -598,6 +623,9 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/scan":
                 body = self._read_json()
                 return self._json(start_scan(body.get("root", "")))
+            if path in ("/api/ingest", "/ingest"):
+                body = self._read_json()
+                return self._json(run_ingest(body.get("root", "")))
             if path == "/api/plan":
                 body = self._read_json()
                 return self._json({"plans": build_plan(body.get("template"))})
