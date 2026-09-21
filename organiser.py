@@ -83,6 +83,7 @@ def scan(root: str) -> list[str]:
 
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 _DASH_RUN_RE = re.compile(r"-+")
+_SEPARATOR_RUN_RE = re.compile(r"[-_]{2,}")
 
 STEM_MAX_LEN = 24
 PATH_MAX_LEN = 200
@@ -106,6 +107,16 @@ def _stem(filename: str, max_len: int = STEM_MAX_LEN) -> str:
     slug = _slugify(base)
     slug = slug[:max_len].rstrip("-")
     return slug or "file"
+
+
+def _tidy_separators(rel_path: str) -> str:
+    """Drop the separators an empty template field leaves behind, so an omitted
+    descriptor or key/BPM never shows up as '__' or a leading '_'."""
+    segments = []
+    for segment in rel_path.split("/"):
+        segment = _SEPARATOR_RUN_RE.sub(lambda m: "_" if "_" in m.group(0) else "-", segment)
+        segments.append(segment.strip("-_"))
+    return "/".join(segments)
 
 
 def _cap_length(rel_path: str, limit: int = PATH_MAX_LEN) -> str:
@@ -217,7 +228,7 @@ def _render_template(template: str, rec: SampleRecord, stem: str, ext: str) -> s
             f"bad rename template {template!r}: unknown field {exc}; "
             f"supported fields are {', '.join('{' + k + '}' for k in subs)}"
         ) from exc
-    return rel.replace("\\", "/")
+    return _tidy_separators(rel.replace("\\", "/"))
 
 
 def _common_dir(paths: list[str]) -> str:
