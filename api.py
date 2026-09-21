@@ -3,18 +3,11 @@ api.py — D. Wires analyzer / index / organiser to HTTP + one HTML page.
 
 Owned files: api.py, static/index.html. Nothing else.
 
-USE_FIXTURES=True is the whole point right now: the UI is built and fully
-demoable against fixtures/records.json + a fake plan, without waiting on
-analyzer.py / index.py / organiser.py (which don't exist yet — three other
-people are writing those in parallel). Flipping USE_FIXTURES to False later
-is meant to be the *only* integration step, so every "real" code path below
-is written and exercised the same way the fixture path is, it's just not
-reachable while the flag is on.
-
-Every import of the other three modules is defensive: if a module can't be
-imported (missing, or broken while someone's mid-edit), we fall back to
-fixtures for whatever that module would have done and report it via
-GET /api/status so the UI can show a small "not live yet" banner.
+USE_FIXTURES=False now that analyzer.py / index.py / organiser.py are real.
+Every import of the other three is still defensive: if one raises on import
+(missing, or mid-edit), we fall back to fixtures for whatever that module
+would have done and report it via GET /api/status so the UI can show a
+small "not live yet" banner. The page must never fail to load.
 
 Stdlib only — no Flask/etc — so there is nothing to install to run this.
 """
@@ -43,9 +36,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 # --------------------------------------------------------------------------
-# THE FLAG. Flip to False once analyzer/index/organiser are real and wired.
+# THE FLAG.
 # --------------------------------------------------------------------------
-USE_FIXTURES = True
+USE_FIXTURES = False
 
 # --------------------------------------------------------------------------
 # Defensive imports of the other three modules. Any of these may not exist
@@ -67,10 +60,10 @@ try:
 except Exception:
     organiser = None
 
-try:
-    from contracts import SearchQuery  # for the real (non-fixture) path
-except Exception:
-    SearchQuery = None
+# contracts.py is the shared foundation everyone already depends on (not
+# one of the three modules under integration) — a plain, non-defensive
+# import, same as make_fixtures.py's.
+from contracts import SearchQuery, SampleRecord, RenamePlan
 
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -141,6 +134,36 @@ def to_dict(rec) -> dict:
     return {"value": rec}
 
 
+_RECORD_FIELDS = set(SampleRecord.__dataclass_fields__)
+
+
+def to_record(rec) -> SampleRecord:
+    """Normalize a fixture dict (or an already-real SampleRecord) into a
+    real dataclass instance. organiser.plan()/index.upsert() do attribute
+    access (rec.filename, rec.path, ...) — a plain dict would blow up."""
+    if isinstance(rec, SampleRecord):
+        return rec
+    if isinstance(rec, dict):
+        return SampleRecord(**{k: v for k, v in rec.items() if k in _RECORD_FIELDS})
+    return rec
+
+
+def to_plan(p) -> RenamePlan:
+    if isinstance(p, RenamePlan):
+        return p
+    if isinstance(p, dict):
+        return RenamePlan(old_path=p.get("old_path"), new_path=p.get("new_path"), reason=p.get("reason", ""))
+    return p
+
+
+def _error_record(path: str, message: str) -> SampleRecord:
+    return SampleRecord(
+        path=path, filename=os.path.basename(path), duration_s=0.0, sample_rate=0,
+        channels=0, peak_db=0.0, sample_type="unknown", bpm=None, key=None,
+        family="unsorted", instrument="unknown", confidence=0.0, error=message,
+    )
+
+
 def strip_heavy(rec: dict) -> dict:
     """Embeddings are 512 floats each and the UI never touches them — drop
     them before they go over the wire, especially since scan progress ships
@@ -194,32 +217,40 @@ def _run_scan_job(job_id: str, root: str) -> None:
             paths = organiser.scan(root)
             with JOBS_LOCK:
                 JOBS[job_id]["total"] = len(paths)
-            records: list[dict] = []
+            records: list[SampleRecord] = []
+            json_records: list[dict] = []
             for p in paths:
                 try:
-                    rec = analyzer.analyze(p) if analyzer is not None else None
-                    rec_d = strip_heavy(to_dict(rec)) if rec is not None else _fixture_like_record(p)
+                    rec = analyzer.analyze(p) if analyzer is not None else to_record(_fixture_like_record(p))
                 except Exception as e:
-                    rec_d = {"path": p, "filename": os.path.basename(p), "error": str(e)}
-                records.append(rec_d)
+                    rec = _error_record(p, str(e))
+                records.append(rec)
+                json_records.append(strip_heavy(to_dict(rec)))
                 with JOBS_LOCK:
-                    JOBS[job_id]["records"] = list(records)
+                    JOBS[job_id]["records"] = list(json_records)
             with JOBS_LOCK:
                 JOBS[job_id]["done"] = True
             LAST_SCAN_RECORDS = records
+            if index is not None:
+                try:
+                    index.upsert(records)
+                except Exception:
+                    pass  # search still works against whatever was already indexed
         else:
             total = len(FIXTURE_RECORDS)
             with JOBS_LOCK:
                 JOBS[job_id]["total"] = total
-            batch: list[dict] = []
+            batch_json: list[dict] = []
+            batch_obj: list[SampleRecord] = []
             for rec in FIXTURE_RECORDS:
                 time.sleep(0.09)
-                batch.append(strip_heavy(rec))
+                batch_json.append(strip_heavy(rec))
+                batch_obj.append(to_record(rec))
                 with JOBS_LOCK:
-                    JOBS[job_id]["records"] = list(batch)
+                    JOBS[job_id]["records"] = list(batch_json)
             with JOBS_LOCK:
                 JOBS[job_id]["done"] = True
-            LAST_SCAN_RECORDS = [strip_heavy(r) for r in FIXTURE_RECORDS]
+            LAST_SCAN_RECORDS = batch_obj
     except Exception as e:
         with JOBS_LOCK:
             JOBS[job_id]["error"] = str(e)
@@ -241,12 +272,15 @@ def build_plan(template: str | None) -> list[dict]:
     global LAST_PLANS
     if plan_available():
         records = LAST_SCAN_RECORDS or []
-        plans = organiser.plan(records, template or DEFAULT_TEMPLATE)
-        plans_d = [to_dict(p) for p in plans]
+        # organiser.plan() has its own default template with its own
+        # placeholder fields ({descriptor}, {keyOrBpm}, ...) — ours
+        # ({filename}) is only valid for the fixture fallback below, so we
+        # only pass one through when the caller actually supplied it.
+        plans = organiser.plan(records, template) if template else organiser.plan(records)
     else:
-        plans_d = _fixture_plan(template)
-    LAST_PLANS = plans_d
-    return plans_d
+        plans = [to_plan(p) for p in _fixture_plan(template)]
+    LAST_PLANS = list(plans)
+    return [to_dict(p) for p in plans]
 
 
 def _fixture_plan(template: str | None) -> list[dict]:
@@ -278,19 +312,26 @@ def _fixture_plan(template: str | None) -> list[dict]:
 def do_apply(dry_run: bool) -> dict:
     plans = LAST_PLANS or []
     if apply_available():
-        undo_log = organiser.apply(plans if not dry_run else [])
-        return {"undo_log": undo_log, "moved": len(plans)}
+        # contracts.py documents apply(plans) -> str; the real organiser.py
+        # takes an extra dry_run kwarg (default True) not in that contract.
+        # We pass it through explicitly rather than special-case around it.
+        undo_log = organiser.apply(plans, dry_run=dry_run)
+        moved = 0 if dry_run else sum(1 for p in plans if p.old_path != p.new_path)
+        return {"undo_log": undo_log or None, "moved": moved}
+    plans_d = [to_dict(p) for p in plans]
     if dry_run:
-        return {"undo_log": None, "moved": len(plans)}
+        return {"undo_log": None, "moved": len(plans_d)}
     log_id = uuid.uuid4().hex[:12]
-    UNDO_LOGS[log_id] = plans
-    return {"undo_log": log_id, "moved": len(plans)}
+    UNDO_LOGS[log_id] = plans_d
+    return {"undo_log": log_id, "moved": len(plans_d)}
 
 
 def do_undo(log) -> dict:
     if apply_available() and isinstance(log, str) and os.path.exists(log):
+        with open(log) as f:
+            restored = sum(1 for line in f if line.strip())
         organiser.undo(log)
-        return {"restored": len(LAST_PLANS or [])}
+        return {"restored": restored}
     plans = UNDO_LOGS.pop(log, None) if isinstance(log, str) else None
     if plans is None:
         return {"restored": 0, "error": "unknown undo log"}
@@ -301,7 +342,7 @@ def do_undo(log) -> dict:
 # /api/search
 # --------------------------------------------------------------------------
 def run_search(body: dict) -> list[dict]:
-    if search_available() and SearchQuery is not None:
+    if search_available():
         q = SearchQuery(
             text=body.get("text"),
             family=body.get("family"),
@@ -379,8 +420,11 @@ def _fixture_search(query: dict) -> list[dict]:
 # /api/fit (multipart upload)
 # --------------------------------------------------------------------------
 def run_fit(temp_path: str, contrast: bool, limit: int = 20) -> list[dict]:
-    if fit_available() and SearchQuery is not None:
-        analyzer.analyze(temp_path)
+    if fit_available():
+        rec = analyzer.analyze(temp_path)
+        # index.search()'s fit_to looks the reference up by path in its own
+        # store — it has to be upserted first or the lookup misses.
+        index.upsert([rec])
         q = SearchQuery(fit_to=temp_path, limit=limit, contrast=contrast)
         hits = index.search(q)
         return [_hit_to_dict(h) for h in hits]
