@@ -93,7 +93,7 @@ def make_messy(source=None):
     out = "messy"
     shutil.rmtree(out, ignore_errors=True)
     subdirs = ["", "New Folder", "New Folder/untitled", "packs/VOL 2",
-               "from dani", "DRUMS????", "downloads"]
+               "from dani", "DRUMS!!!!", "downloads"]
     for s in subdirs:
         os.makedirs(os.path.join(out, s), exist_ok=True)
 
