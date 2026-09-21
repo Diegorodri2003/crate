@@ -213,7 +213,10 @@ def _render_template(template: str, rec: SampleRecord, stem: str, ext: str) -> s
     try:
         rel = template.format(**subs)
     except (KeyError, IndexError) as exc:
-        raise ValueError(f"bad rename template {template!r}: unknown field {exc}") from exc
+        raise ValueError(
+            f"bad rename template {template!r}: unknown field {exc}; "
+            f"supported fields are {', '.join('{' + k + '}' for k in subs)}"
+        ) from exc
     return rel.replace("\\", "/")
 
 

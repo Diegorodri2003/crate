@@ -70,7 +70,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 FIXTURES_PATH = os.path.join(HERE, "fixtures", "records.json")
 STATIC_DIR = os.path.join(HERE, "static")
 
-DEFAULT_TEMPLATE = "{family}/{instrument}/{filename}"
+DEFAULT_TEMPLATE = "{family}/{instrument}/{descriptor}_{keyOrBpm}_{type}_{stem}{ext}"
 
 
 def _load_fixture_records() -> list[dict]:
@@ -297,11 +297,7 @@ def build_plan(template: str | None) -> list[dict]:
     global LAST_PLANS
     if plan_available():
         records = LAST_SCAN_RECORDS or []
-        # organiser.plan() has its own default template with its own
-        # placeholder fields ({descriptor}, {keyOrBpm}, ...) — ours
-        # ({filename}) is only valid for the fixture fallback below, so we
-        # only pass one through when the caller actually supplied it.
-        plans = organiser.plan(records, template) if template else organiser.plan(records)
+        plans = organiser.plan(records, template or DEFAULT_TEMPLATE)
     else:
         plans = [to_plan(p) for p in _fixture_plan(template)]
     LAST_PLANS = list(plans)
@@ -320,7 +316,11 @@ def _fixture_plan(template: str | None) -> list[dict]:
             try:
                 new_path = "/demo/sorted/" + tmpl.format(**rec).lstrip("/")
             except Exception:
-                new_path = "/demo/sorted/" + DEFAULT_TEMPLATE.format(**rec)
+                # fixture dicts don't carry organiser's template fields
+                # ({descriptor}, {keyOrBpm}, ...) — fall back to a plain path.
+                new_path = "/demo/sorted/{}/{}/{}".format(
+                    rec.get("family", "unsorted"), rec.get("instrument", "unknown"), rec["filename"]
+                )
             bits = [f"{rec['family']}/{rec['instrument']} match ({round(rec.get('confidence', 0) * 100)}% confidence)"]
             if rec.get("bpm"):
                 bits.append(f"{rec['bpm']} BPM")
